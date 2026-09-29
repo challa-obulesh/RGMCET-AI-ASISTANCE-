@@ -1,0 +1,49 @@
+[
+  {
+    "kind": "college",
+    "title": "Rajeev Gandhi Memorial College of Engineering and Technology",
+    "content": "The official website identifies the institution as Rajeev Gandhi Memorial College of Engineering and Technology (RGMCET), Nandyal, Andhra Pradesh. The homepage says the institution was founded in 1995 and describes a 32.04-acre campus on NH-40 at Nandyal. The About page also says it was inaugurated on 09 March 1996 and separately describes a 50-acre campus. Because official pages disagree on acreage and distinguish founding from inauguration, do not state a single campus area or conflate those dates.",
+    "source": "https://www.rgmcet.edu.in/",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["RGMCET", "RGM College", "RGM College of Engineering and Technology"],
+    "facts": {
+      "official_name": "Rajeev Gandhi Memorial College of Engineering and Technology",
+      "short_name": "RGMCET",
+      "location": "Nandyal, Andhra Pradesh",
+      "founded_year": 1995,
+      "inaugurated_date": "1996-03-09",
+      "campus_area_acres": null,
+      "campus_area_note": "Conflicting figures appear on official homepage (32.04 acres) and About page (50 acres); omitted as a single answer."
+    }
+  },
+  {
+    "kind": "contact",
+    "title": "Official RGMCET address and contacts",
+    "content": "The official Contact Us page lists the location as Nerawada X Roads, Nandyal-518501, Andhra Pradesh, India. The About page lists Principal Dr. T. Jayachandra Prasad with phone +91-9440290470 and email principal.9@jntua.ac.in. The Contact Us page lists principal.9@jntua.ac.in and principal@rgmcet.edu.in in its email section. The common footer visibly displays principal.9@jntua.ac.in but its mailto target is principal@email.com; do not use that mismatched link target as a verified email. Identify contact sources/roles when presenting them.",
+    "source": "https://www.rgmcet.edu.in/contact.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["college address", "college phone", "college email", "official contact"],
+    "facts": {
+      "address": "Nerawada X Roads, Nandyal-518501, Andhra Pradesh, India",
+      "institutional_phone_displayed_in_footer": "+91 85142 75203",
+      "contacts": [
+        {
+          "label": "Principal (About page administrator listing)",
+          "name": "Dr. T. Jayachandra Prasad",
+          "designation": "Principal",
+          "phone": "+91-9440290470",
+          "email": "principal.9@jntua.ac.in",
+          "source": "https://www.rgmcet.edu.in/about-us"
+        },
+        {
+          "label": "Contact Us page email listing",
+          "emails": ["principal.9@jntua.ac.in", "principal@rgmcet.edu.in"],
+          "source": "https://www.rgmcet.edu.in/contact.php"
+        }
+      ],
+      "email_link_discrepancy": "Common footer mailto target does not match its visible email label; do not use the link target."
+    }
+  }
+]

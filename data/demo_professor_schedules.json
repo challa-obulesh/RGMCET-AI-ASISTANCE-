@@ -1,0 +1,8 @@
+[
+  {"schedule_id": "SCH-DEMO-MON", "professor_id": "PROF-DEMO-001", "day": "Monday", "start_time": "10:00", "end_time": "16:00", "status": "AVAILABLE", "is_demo": true},
+  {"schedule_id": "SCH-DEMO-TUE", "professor_id": "PROF-DEMO-001", "day": "Tuesday", "start_time": "10:00", "end_time": "16:00", "status": "AVAILABLE", "is_demo": true},
+  {"schedule_id": "SCH-DEMO-WED", "professor_id": "PROF-DEMO-001", "day": "Wednesday", "start_time": "10:00", "end_time": "16:00", "status": "AVAILABLE", "is_demo": true},
+  {"schedule_id": "SCH-DEMO-THU", "professor_id": "PROF-DEMO-001", "day": "Thursday", "start_time": "10:00", "end_time": "16:00", "status": "AVAILABLE", "is_demo": true},
+  {"schedule_id": "SCH-DEMO-FRI", "professor_id": "PROF-DEMO-001", "day": "Friday", "start_time": "10:00", "end_time": "16:00", "status": "AVAILABLE", "is_demo": true},
+  {"schedule_id": "SCH-DEMO-SAT", "professor_id": "PROF-DEMO-001", "day": "Saturday", "start_time": "10:00", "end_time": "16:00", "status": "AVAILABLE", "is_demo": true}
+]

@@ -1,0 +1,15 @@
+[
+  {
+    "professor_id": "PROF-DEMO-001",
+    "name": "Ravi Sir (DEMO DATA)",
+    "aliases": ["Ravi sir"],
+    "department": "CSE (DEMO)",
+    "designation": "Assistant Professor (DEMO)",
+    "office": "CSE Department (DEMO)",
+    "room": "CSE-201 (DEMO)",
+    "email": "",
+    "subjects": [],
+    "active": true,
+    "is_demo": true
+  }
+]

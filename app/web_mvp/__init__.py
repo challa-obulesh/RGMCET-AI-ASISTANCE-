@@ -1,0 +1,1 @@
+"""Web-only RGMCET AI Campus Assistant MVP."""

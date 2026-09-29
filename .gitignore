@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+credentials/*.json
+creditails/
+__pycache__/
+*.pyc
+.pytest_cache/
+.vscode/
+.venv/
+env/
+*.sqlite3
+node_modules/
+frontend/dist/
+frontend/.vite/

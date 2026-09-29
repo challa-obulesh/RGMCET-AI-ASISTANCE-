@@ -1,0 +1,122 @@
+[
+  {
+    "kind": "department",
+    "title": "Computer Science and Engineering (Data Science)",
+    "content": "RGMCET's official CSE (Data Science) page describes a four-year B.Tech specialization. It lists an intake of 240, 160 credits and 8 semesters. The page says the curriculum covers applied statistics, applied mathematics and computer science, with hands-on practicum, laboratories and real-world problems. Its vision is to train the next generation of data scientists to solve challenges and innovate through research. Department contact listed on the page: hcseds@rgmcet.edu.in, +91 9849348501. The official faculty page names Dr. B. Bhaskara Rao as Associate Professor & HOD.",
+    "source": "https://www.rgmcet.edu.in/department-of-cseds.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["CSE Data Science", "CSE DS", "CSE (Data Science)", "Computer Science and Engineering Data Science", "Computer Science & Engineering (Data Science)"],
+    "facts": {"course_name": "Computer Science & Engineering (Data Science)", "degree": "B.Tech", "duration_years": 4, "intake": 240, "credits": 160, "semesters": 8, "department_email": "hcseds@rgmcet.edu.in", "department_phone": "+91 9849348501", "hod": "Dr. B. Bhaskara Rao", "hod_designation": "Associate Professor & HOD", "faculty_source": "https://www.rgmcet.edu.in/cseds_faculty1.php", "program_structure_source": "https://www.rgmcet.edu.in/cseds_dp.php"}
+  },
+  {
+    "kind": "department",
+    "title": "Computer Science and Engineering",
+    "content": "The official CSE page says the department was established in 1995 and offers B.Tech Computer Science and Engineering with a sanctioned intake of 420, an M.Tech course in Computer Science with intake 9, and a full-time doctoral program. The page lists B.Tech course structures under RGM-R19, RGM-R15 and RGM-R12.",
+    "source": "https://www.rgmcet.edu.in/department-of-cse.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["CSE", "Computer Science", "Computer Science Engineering", "Computer Science and Engineering"],
+    "facts": {"btech_intake": 420, "mtech_intake": 9, "established_year": 1995, "programs": ["B.Tech Computer Science and Engineering", "M.Tech Computer Science", "Full-time doctoral program"]}
+  },
+  {
+    "kind": "department",
+    "title": "Computer Science and Engineering (Artificial Intelligence and Machine Learning)",
+    "content": "The official CSE (AI & ML) page describes a B.Tech degree program introduced in academic year 2022-2023 and lists four years, 160 credits and 8 semesters. The page has conflicting intake figures: its description says sanctioned intake 60, while the intake panel displays 240. No single intake value is presented as authoritative. Department contact listed: hcseaiml@rgmcet.edu.in, +91 8897272089.",
+    "source": "https://www.rgmcet.edu.in/department-of-aiml.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["CSE AI ML", "CSE AIML", "CSE (AI & ML)", "Computer Science Artificial Intelligence Machine Learning"],
+    "facts": {"course_name": "Computer Science and Engineering (Artificial Intelligence and Machine Learning)", "degree": "B.Tech", "duration_years": 4, "intake": null, "intake_note": "Official page conflicts: course description says 60; intake panel shows 240.", "credits": 160, "semesters": 8, "introduced_academic_year": "2022-2023", "department_email": "hcseaiml@rgmcet.edu.in", "department_phone": "+91 8897272089"}
+  },
+  {
+    "kind": "department",
+    "title": "Computer Science and Engineering (Cyber Security)",
+    "content": "The official page describes a B.Tech Computer Science and Engineering (Cyber Security) program introduced in academic year 2022-2023. It lists four years, 160 credits and 8 semesters. The description says sanctioned intake 60 while the intake panel displays 120, so the intake is omitted as unresolved. Department contact listed: hcsecs@rgmcet.edu.in, +91 9787890752.",
+    "source": "https://www.rgmcet.edu.in/department-of-csecs.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["CSE Cyber Security", "CSE CS", "Cyber Security", "Computer Science and Engineering Cyber Security"],
+    "facts": {"course_name": "Computer Science and Engineering (Cyber Security)", "degree": "B.Tech", "duration_years": 4, "intake": null, "intake_note": "Official page conflicts: description says 60; intake panel shows 120.", "credits": 160, "semesters": 8, "introduced_academic_year": "2022-2023", "department_email": "hcsecs@rgmcet.edu.in", "department_phone": "+91 9787890752"}
+  },
+  {
+    "kind": "department",
+    "title": "Computer Science and Engineering and Business Systems",
+    "content": "The official page describes a B.Tech Computer Science and Engineering and Business Systems program with intake 60, introduced in academic year 2020-2021. It lists four years, 160 credits and 8 semesters. Department contact listed: hcsebs@rgmcet.edu.in, +91 8897272089.",
+    "source": "https://www.rgmcet.edu.in/department-of-csbs.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["CSE Business Systems", "CSE&BS", "CSBS", "Computer Science and Engineering and Business Systems"],
+    "facts": {"course_name": "Computer Science and Engineering and Business Systems", "degree": "B.Tech", "duration_years": 4, "intake": 60, "credits": 160, "semesters": 8, "introduced_academic_year": "2020-2021", "department_email": "hcsebs@rgmcet.edu.in", "department_phone": "+91 8897272089"}
+  },
+  {
+    "kind": "department",
+    "title": "Information Technology",
+    "content": "The official Information Technology page describes B.Tech Information Technology and lists intake 60, four years, 160 credits and 8 semesters. It says the department started functioning in 1998. Department contact listed: rgmithod2015@gmail.com, +91 8897272089.",
+    "source": "https://www.rgmcet.edu.in/department-of-it.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["IT", "Information Technology", "IT department"],
+    "facts": {"course_name": "Information Technology", "degree": "B.Tech", "duration_years": 4, "intake": 60, "credits": 160, "semesters": 8, "started_year": 1998, "department_email": "rgmithod2015@gmail.com", "department_phone": "+91 8897272089"}
+  },
+  {
+    "kind": "department",
+    "title": "Electronics and Communication Engineering",
+    "content": "The official ECE page says the department was established in 1995 and offers B.Tech ECE with intake 240 and M.Tech VLSID with intake 18. It describes a full-time doctoral program, 11 laboratories, an Ideation and Innovation Center and a Virtual Nano Lab. It lists four years, 160 credits and 8 semesters for the undergraduate course. Department contact listed: hece@rgmcet.edu.in, +91 87900 50087.",
+    "source": "https://www.rgmcet.edu.in/department-of-ece.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["ECE", "Electronics and Communication", "Electronics & Communication Engineering"],
+    "facts": {"btech_intake": 240, "mtech_program": "VLSID", "mtech_intake": 18, "duration_years": 4, "credits": 160, "semesters": 8, "laboratory_count": 11, "department_email": "hece@rgmcet.edu.in", "department_phone": "+91 87900 50087"}
+  },
+  {
+    "kind": "department",
+    "title": "Electrical and Electronics Engineering",
+    "content": "The official EEE page describes the Electrical and Electronics Engineering department as started in 1995 and lists a four-year B.Tech course, 160 credits and 8 semesters. Historical intake information in the description conflicts with the intake panel, so no current intake value is asserted. Department contact listed: heee@rgmcet.edu.in, +91 9959022458.",
+    "source": "https://www.rgmcet.edu.in/department-of-eee.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["EEE", "Electrical and Electronics", "Electrical & Electronics Engineering"],
+    "facts": {"course_name": "Electrical and Electronics Engineering", "degree": "B.Tech", "duration_years": 4, "intake": null, "intake_note": "Official page contains differing historical and panel values.", "credits": 160, "semesters": 8, "started_year": 1995, "department_email": "heee@rgmcet.edu.in", "department_phone": "+91 9959022458"}
+  },
+  {
+    "kind": "department",
+    "title": "Civil Engineering",
+    "content": "The official Civil Engineering page says the department was established in 2008, initially with B.Tech intake 60, and currently lists B.Tech intake 120. It lists M.Tech Computer Aided Structural Engineering intake 18 and describes civil engineering divisions, laboratories and consultancy services. The B.Tech panel lists four years, 160 credits and 8 semesters.",
+    "source": "https://www.rgmcet.edu.in/department-of-ce.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["Civil", "CE", "Civil Engineering"],
+    "facts": {"btech_intake": 120, "mtech_program": "Computer Aided Structural Engineering", "mtech_intake": 18, "duration_years": 4, "credits": 160, "semesters": 8, "established_year": 2008}
+  },
+  {
+    "kind": "department",
+    "title": "Mechanical Engineering",
+    "content": "The official Mechanical Engineering page says the department has functioned since the institute's inception in 1995. It offers B.Tech Mechanical Engineering with intake 120 and M.Tech Energy Engineering with intake 9. The B.Tech panel lists four years, 160 credits and 8 semesters.",
+    "source": "https://www.rgmcet.edu.in/department-of-me.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["Mechanical", "ME", "Mechanical Engineering"],
+    "facts": {"btech_intake": 120, "mtech_program": "Energy Engineering", "mtech_intake": 9, "duration_years": 4, "credits": 160, "semesters": 8, "started_year": 1995}
+  },
+  {
+    "kind": "department",
+    "title": "Master of Business Administration",
+    "content": "The official Management Studies page offers an MBA with intake 60, two years, 102 credits and 4 semesters. The page identifies Marketing, Finance and HRM specializations. Department contact listed: rgmmbahod@gmail.com, +91 7382070765.",
+    "source": "https://www.rgmcet.edu.in/department-of-mba.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["MBA", "Management Studies", "Master of Business Administration"],
+    "facts": {"course_name": "Master of Business Administration", "duration_years": 2, "intake": 60, "credits": 102, "semesters": 4, "specializations": ["Marketing", "Finance", "HRM"], "department_email": "rgmmbahod@gmail.com", "department_phone": "+91 7382070765"}
+  },
+  {
+    "kind": "department",
+    "title": "Master of Computer Applications",
+    "content": "The official MCA page describes an MCA program with intake 60, two years, 102 credits and 4 semesters. Department contact listed: rgmcse2015@gmail.com, +91 9440087544.",
+    "source": "https://www.rgmcet.edu.in/department-of-mca.php",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["MCA", "Master of Computer Applications"],
+    "facts": {"course_name": "Master of Computer Applications", "duration_years": 2, "intake": 60, "credits": 102, "semesters": 4, "department_email": "rgmcse2015@gmail.com", "department_phone": "+91 9440087544"}
+  }
+]

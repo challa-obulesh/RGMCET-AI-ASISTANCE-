@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+credentials/
+creditails/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.git/
+frontend/node_modules/
+node_modules/
+AI_Professor_Assistant_2_Page_Concept.pdf

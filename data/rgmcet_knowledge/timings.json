@@ -1,0 +1,12 @@
+[
+  {
+    "kind": "library_hours",
+    "title": "RGMCET Central Library working hours",
+    "content": "The official Library page contains differing working-day hours in separate sections: one says 8:00 AM to 8:00 PM, another says 8:00 AM to 6:00 PM. Until RGMCET confirms which is current, no single opening time is represented as authoritative.",
+    "source": "https://www.rgmcet.edu.in/library",
+    "verified": true,
+    "last_checked": "2026-09-29",
+    "aliases": ["library hours", "library timing", "library timings", "working hours"],
+    "facts": {"working_day_hours": null, "conflict": ["8:00 AM-8:00 PM", "8:00 AM-6:00 PM"]}
+  }
+]
