@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.web_mvp.api.appointments import router as appointments_router
+from app.web_mvp.api.auth import router as auth_router
 from app.web_mvp.api.chat import router as chat_router
 from app.web_mvp.api.professors import router as professors_router
 from app.web_mvp.config import CORS_ORIGINS
@@ -21,14 +22,15 @@ async def lifespan(app: FastAPI):
     await close_store()
 
 
-app = FastAPI(title="RGMCET AI Campus Assistant", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="RGMCET AI Campus Assistant", version="0.3.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(professors_router)
 app.include_router(appointments_router)
@@ -41,5 +43,5 @@ async def health():
         "status": "ok",
         "demo_mode": demo_mode_active(),
         "llm_provider": configured_provider() or "none",
-        "version": "0.2.0",
+        "version": "0.3.0",
     }

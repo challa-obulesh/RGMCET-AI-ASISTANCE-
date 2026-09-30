@@ -26,6 +26,7 @@ def _demo_documents() -> dict[str, list[dict[str, Any]]]:
         "students": [{"student_id": "demo-student", "name": "Demo Student", "is_demo": True}],
         "appointments": [],
         "chat_sessions": [],
+        "users": [],
     }
 
 
@@ -38,10 +39,15 @@ async def init_store() -> None:
             _client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=2500)
             _database = _client[DATABASE_NAME]
             await _client.admin.command("ping")
+            # Users (authentication)
+            await _database.users.create_index("user_id", unique=True)
+            await _database.users.create_index("email", unique=True)
+            # Professors
             await _database.professors.create_index("professor_id", unique=True)
             await _database.professors.create_index([("name", "text"), ("aliases", "text")])
             await _database.professor_schedules.create_index([("professor_id", 1), ("day", 1)])
             await _database.students.create_index("student_id", unique=True)
+            # Appointments
             await _database.appointments.create_index("appointment_id", unique=True)
             await _database.appointments.create_index([("student_id", 1), ("date", -1)])
             await _database.appointments.create_index([("professor_id", 1), ("date", 1), ("status", 1)])

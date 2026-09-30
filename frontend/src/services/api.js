@@ -1,9 +1,18 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
+function getToken() {
+  try { return localStorage.getItem('rgmcet-token') || '' } catch { return '' }
+}
+
 async function request(path, options = {}) {
+  const token = getToken()
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
   })
   const payload = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(payload.detail || 'The service could not complete that request.')
@@ -11,14 +20,31 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  // Chat
   chat: (body) => request('/chat', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Professors
   professors: (query = '') => request(`/professors${query ? `?q=${encodeURIComponent(query)}` : ''}`),
   schedule: (id) => request(`/professors/${encodeURIComponent(id)}/schedule`),
   availability: (id, date) => request(`/professors/${encodeURIComponent(id)}/availability?date=${date}`),
+
+  // Appointments
   createAppointment: (body) => request('/appointments', { method: 'POST', body: JSON.stringify(body) }),
   studentAppointments: (id) => request(`/students/${encodeURIComponent(id)}/appointments`),
+  myAppointments: () => request('/appointments'),
   pendingAppointments: () => request('/appointments?status=PENDING_APPROVAL'),
-  decideAppointment: (id, decision) => request(`/appointments/${encodeURIComponent(id)}/${decision}`, { method: 'POST' }),
+  professorAppointments: (status) => request(`/professor/appointments${status ? `?status=${status}` : ''}`),
+  decideAppointment: (id, decision) =>
+    request(`/appointments/${encodeURIComponent(id)}/${decision}`, { method: 'POST' }),
+  getAppointment: (id) => request(`/appointments/${encodeURIComponent(id)}`),
+
+  // Auth
+  register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+  login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  me: () => request('/auth/me'),
+
+  // Health
+  health: () => request('/health'),
 }
 
 export const DEMO_STUDENT_ID = 'demo-student'
