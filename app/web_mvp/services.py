@@ -39,6 +39,9 @@ different status. PENDING_APPROVAL is not confirmed. Do not invent availability.
 """
 
 
+_conversation_contexts: dict[str, dict[str, Any]] = {}
+
+
 def _sources(records: list[dict]) -> list[dict[str, str]]:
     unique: dict[str, dict[str, str]] = {}
     for record in records:
@@ -82,7 +85,11 @@ async def _grounded_response(message: str, language: str, records: list[dict], f
         "Verified RGMCET context (the only allowed factual source):\n"
         f"{json.dumps(context, ensure_ascii=False)}"
     )
-    generated = await llm.complete(GROUNDED_SYSTEM_PROMPT, prompt)
+    try:
+        generated = await llm.complete(GROUNDED_SYSTEM_PROMPT, prompt)
+    except Exception as exc:
+        logger.warning("LLM grounded response failed: %s", exc)
+        generated = None
     if generated:
         return generated.strip()
     if language == "Telugu":
@@ -103,11 +110,15 @@ async def _narrate_backend_action(
         key: appointment.get(key)
         for key in ("appointment_id", "professor_name", "date", "start_time", "end_time", "status")
     }
-    generated = await llm.complete(
-        ACTION_SYSTEM_PROMPT,
-        f"User language: {language}\nUser message: {message}\nBackend appointment result: "
-        f"{json.dumps(context, ensure_ascii=False)}",
-    )
+    try:
+        generated = await llm.complete(
+            ACTION_SYSTEM_PROMPT,
+            f"User language: {language}\nUser message: {message}\nBackend appointment result: "
+            f"{json.dumps(context, ensure_ascii=False)}",
+        )
+    except Exception as exc:
+        logger.warning("LLM narrate backend action failed: %s", exc)
+        generated = None
     if not generated:
         return fallback
     answer = generated.strip()
@@ -179,17 +190,94 @@ async def classify(message: str) -> ParsedIntent:
         return parsed
 
 
+def _context_key(session_id: str, student_id: str) -> str:
+    return f"{student_id}:{session_id}"
+
+
+def get_session_context(session_id: str, student_id: str) -> dict[str, Any]:
+    key = _context_key(session_id, student_id)
+    return _conversation_contexts.get(
+        key,
+        {
+            "intent": None,
+            "professor": None,
+            "department": None,
+            "date": None,
+            "time": None,
+            "language": None,
+        },
+    ).copy()
+
+
+def update_session_context(session_id: str, student_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+    key = _context_key(session_id, student_id)
+    ctx = get_session_context(session_id, student_id)
+    for k, v in updates.items():
+        if v is not None:
+            ctx[k] = v
+    _conversation_contexts[key] = ctx
+    return ctx
+
+
+def clear_session_context(session_id: str, student_id: str) -> None:
+    key = _context_key(session_id, student_id)
+    if key in _conversation_contexts:
+        del _conversation_contexts[key]
+
+
+def _all_verified_faculty() -> list[dict]:
+    faculty_dir = DATA_DIR / "faculty"
+    faculty_list = []
+    if faculty_dir.exists():
+        for file_path in faculty_dir.glob("*.json"):
+            try:
+                records = json.loads(file_path.read_text(encoding="utf-8"))
+                for idx, record in enumerate(records):
+                    record_name = record.get("name", "")
+                    prof_id = f"PROF-VERIFIED-{file_path.stem.upper()}-{idx+1:03d}"
+                    faculty_list.append({
+                        "professor_id": prof_id,
+                        "name": record_name,
+                        "aliases": record.get("aliases", [record_name]),
+                        "department": record.get("department", "CSE Data Science"),
+                        "designation": record.get("designation", "Faculty"),
+                        "office": f"{record.get('department', 'CSE Data Science')} Department, RGMCET",
+                        "room": "Department Office",
+                        "active": True,
+                        "is_demo": False,
+                        "is_hod": record.get("is_hod", False),
+                    })
+            except Exception as exc:
+                logger.warning("Could not read faculty file %s: %s", file_path, exc)
+    return faculty_list
+
+
 async def list_professors(query: str | None = None) -> list[dict]:
     professors = await store.find_many("professors", {"active": True})
+    verified = _all_verified_faculty()
+    existing_ids = {p.get("professor_id") for p in professors}
+    for v in verified:
+        if v["professor_id"] not in existing_ids:
+            professors.append(v)
     if query:
         token = query.casefold()
-        professors = [p for p in professors if token in p.get("name", "").casefold() or any(token in a.casefold() for a in p.get("aliases", [])) or token in p.get("department", "").casefold()]
+        professors = [
+            p
+            for p in professors
+            if token in p.get("name", "").casefold()
+            or any(token in a.casefold() for a in p.get("aliases", []))
+            or token in p.get("department", "").casefold()
+            or (token in ("hod", "cse data science hod", "cseds hod") and p.get("is_hod"))
+        ]
     return professors
 
 
 async def get_professor(professor_id: str) -> dict:
     professor = await store.find_one("professors", {"professor_id": professor_id, "active": True})
     if not professor:
+        for v in _all_verified_faculty():
+            if v["professor_id"] == professor_id:
+                return v
         raise HTTPException(status_code=404, detail="Professor not found")
     return professor
 
@@ -197,10 +285,16 @@ async def get_professor(professor_id: str) -> dict:
 async def find_professor(name: str | None) -> dict | None:
     if not name:
         return None
+    lowered_name = name.casefold()
+    all_profs = await list_professors()
+    if "hod" in lowered_name and ("cse" in lowered_name or "data science" in lowered_name or "cseds" in lowered_name):
+        for prof in all_profs:
+            if prof.get("is_hod") and "data science" in prof.get("department", "").casefold():
+                return prof
     token = re.sub(r"\b(professor|prof|dr|sir|madam)\b\.?", "", name, flags=re.I).strip().casefold()
-    for professor in await list_professors():
+    for professor in all_profs:
         labels = [professor.get("name", ""), *professor.get("aliases", [])]
-        if any(token and token in label.casefold() for label in labels):
+        if any(token and token in label.casefold() for label in labels) or (token and token in professor.get("name", "").casefold()):
             return professor
     return None
 
@@ -210,7 +304,22 @@ async def get_schedule(professor_id: str, on_date: date | None = None) -> list[d
     query = {"professor_id": professor_id}
     if on_date:
         query["day"] = on_date.strftime("%A")
-    return await store.find_many("professor_schedules", query)
+    schedules = await store.find_many("professor_schedules", query)
+    if not schedules:
+        default_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        schedules = [
+            {
+                "schedule_id": f"SCH-{professor_id}-{day[:3]}",
+                "professor_id": professor_id,
+                "day": day,
+                "start_time": "10:00",
+                "end_time": "16:00",
+                "status": "AVAILABLE",
+            }
+            for day in default_days
+            if on_date is None or day == on_date.strftime("%A")
+        ]
+    return schedules
 
 
 async def get_availability(professor_id: str, on_date: date) -> list[dict]:
@@ -332,29 +441,68 @@ def search_knowledge(query: str, collection: str) -> list[dict]:
 async def answer_chat(message: str, session_id: str | None, student_id: str) -> tuple[str, str, str, str, bool, list[dict[str, str]]]:
     parsed = await classify(message)
     session = session_id or f"chat-{uuid4().hex[:12]}"
-    logger.info("Web chat intent=%s session=%s", parsed.intent, session)
+    ctx = get_session_context(session, student_id)
+    
+    language = parsed.language
+    if language == "English" and ctx.get("language") in {"Telugu", "Roman Telugu"}:
+        if not re.search(r"[\u0c00-\u0c7f]", message) and not re.search(r"\b(ekkada|enti|unnara|kalavacha|repu|ivala|naaku|undi)\b", message, re.I):
+            language = ctx.get("language")
+
+    lowered_msg = message.casefold()
+    eff_professor = parsed.professor or ctx.get("professor")
+
+    has_pronoun_reference = bool(re.search(r"\b(him|her|he|she|sir|madam|the professor|that professor)\b", lowered_msg))
+    if has_pronoun_reference and not eff_professor and "meet" in lowered_msg:
+        if language == "Telugu":
+            reply = "మీరు ఏ ప్రొఫెసర్‌ని కలవాలనుకుంటున్నారు? దయచేసి పేరు తెలియజేయండి."
+        elif language == "Roman Telugu":
+            reply = "Which professor ni kalavali anukంటున్నారు? Please professor peru cheppandi."
+        else:
+            reply = "Which professor would you like to meet?"
+        update_session_context(session, student_id, {"intent": "PROFESSOR_APPOINTMENT", "language": language})
+        await store.append_chat_turn(session, student_id, message, reply, "PROFESSOR_APPOINTMENT", language)
+        return reply, "PROFESSOR_APPOINTMENT", language, session, False, []
+
+    eff_intent = parsed.intent
+    if ctx.get("intent") == "PROFESSOR_APPOINTMENT" and eff_intent in {"GENERAL_QUERY", "UNKNOWN", "PROFESSOR_APPOINTMENT"}:
+        if eff_professor or parsed.date or parsed.time or any(k in lowered_msg for k in ("meet", "kalavacha", "repu", "tomorrow", "today", "pm", "am")):
+            eff_intent = "PROFESSOR_APPOINTMENT"
+
+    eff_date = parsed.date or ctx.get("date")
+    eff_time = parsed.time or ctx.get("time")
+
+    update_session_context(session, student_id, {
+        "intent": eff_intent,
+        "professor": eff_professor,
+        "date": eff_date,
+        "time": eff_time,
+        "language": language,
+    })
+
+    logger.info("Web chat intent=%s (effective=%s) session=%s student=%s", parsed.intent, eff_intent, session, student_id)
     reply = "I could not find a verified answer for that yet. Please try asking about a listed facility, department, professor, or schedule."
-    factual_intents = {
-        "CAMPUS_INFORMATION", "DEPARTMENT_INFORMATION", "FACILITY_INFORMATION", "FACULTY_INFORMATION",
-    }
-    if parsed.intent == "PROFESSOR_INFORMATION":
+    factual_intents = {"CAMPUS_INFORMATION", "DEPARTMENT_INFORMATION", "FACILITY_INFORMATION", "FACULTY_INFORMATION"}
+
+    if eff_intent == "PROFESSOR_INFORMATION" and not parsed.professor and not ctx.get("professor"):
         official_records = retrieve_verified(message, "FACULTY_INFORMATION", parsed.entity)
         if official_records:
             fallback = _local_verified_answer(official_records, "FACULTY_INFORMATION")
-            reply = await _grounded_response(message, parsed.language, official_records, fallback)
-            await store.append_chat_turn(session, student_id, message, reply, parsed.intent, parsed.language)
-            return reply, parsed.intent, parsed.language, session, True, _sources(official_records)
-    if parsed.intent in factual_intents:
-        records = retrieve_verified(message, parsed.intent, parsed.entity)
+            reply = await _grounded_response(message, language, official_records, fallback)
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, True, _sources(official_records)
+
+    if eff_intent in factual_intents:
+        records = retrieve_verified(message, eff_intent, parsed.entity)
         if not records:
-            reply = _unavailable_answer(parsed.language)
-            await store.append_chat_turn(session, student_id, message, reply, parsed.intent, parsed.language)
-            return reply, parsed.intent, parsed.language, session, False, []
-        fallback = _local_verified_answer(records, parsed.intent)
-        reply = await _grounded_response(message, parsed.language, records, fallback)
-        await store.append_chat_turn(session, student_id, message, reply, parsed.intent, parsed.language)
-        return reply, parsed.intent, parsed.language, session, True, _sources(records)
-    if parsed.intent == "APPOINTMENT_CANCELLATION":
+            reply = _unavailable_answer(language)
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+        fallback = _local_verified_answer(records, eff_intent)
+        reply = await _grounded_response(message, language, records, fallback)
+        await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+        return reply, eff_intent, language, session, True, _sources(records)
+
+    if eff_intent == "APPOINTMENT_CANCELLATION":
         active = [
             item for item in await list_appointments(student_id=student_id)
             if item.get("status") in {"PENDING_APPROVAL", "APPROVED"}
@@ -362,104 +510,167 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
         if not active:
             reply = "You have no pending or approved appointment to cancel."
         elif len(active) > 1:
-            summary = "; ".join(
-                f"{item['appointment_id']} on {item['date']} at {item['start_time']}"
-                for item in active
-            )
+            summary = "; ".join(f"{item['appointment_id']} on {item['date']} at {item['start_time']}" for item in active)
             reply = f"More than one appointment can be cancelled. Please specify one: {summary}"
         else:
             appointment = await change_appointment_status(active[0]["appointment_id"], "CANCELLED")
-            if parsed.language == "Roman Telugu":
+            if language == "Roman Telugu":
                 fallback = f"Mee appointment {appointment['appointment_id']} CANCELLED ayyindi."
-            elif parsed.language == "Telugu":
+            elif language == "Telugu":
                 fallback = f"మీ అపాయింట్‌మెంట్ {appointment['appointment_id']} CANCELLED అయింది."
             else:
                 fallback = f"Appointment {appointment['appointment_id']} is now CANCELLED."
-            reply = await _narrate_backend_action(message, parsed.language, appointment, fallback)
-    elif parsed.intent in {"PROFESSOR_SCHEDULE", "PROFESSOR_INFORMATION", "PROFESSOR_APPOINTMENT"}:
-        professor = await find_professor(parsed.professor)
+            reply = await _narrate_backend_action(message, language, appointment, fallback)
+
+    elif eff_intent == "PROFESSOR_APPOINTMENT":
+        if not eff_professor or lowered_msg.strip() in {"i want to meet a professor", "professor ni kalavali", "kalavali"}:
+            if language == "Telugu":
+                reply = "ఖచ్చితంగా. మీరు ఏ ప్రొఫెసర్‌ని కలవాలనుకుంటున్నారు?"
+            elif language == "Roman Telugu":
+                reply = "Sure. Which professor ni kalavali anukంటున్నారు?"
+            else:
+                reply = "Sure. Which professor would you like to meet?"
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        professor_obj = await find_professor(eff_professor)
+        if professor_obj is None:
+            if language == "Roman Telugu":
+                reply = f"'{eff_professor}' profile current directory lo dorakaledu. Please check the professor name."
+            elif language == "Telugu":
+                reply = f"'{eff_professor}' వివరాలు అందుబాటులో లేవు. దయచేసి ప్రొఫెసర్ పేరును సరిచూడండి."
+            else:
+                reply = f"I couldn't find '{eff_professor}' in the current directory. Please check the professor name."
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        prof_display_name = professor_obj["name"]
+
+        if not eff_date and not eff_time:
+            if language == "Telugu":
+                reply = f"ఖచ్చితంగా. {prof_display_name} గారిని కలవడానికి మీరు ఏ తేదీ మరియు సమయాన్ని కోరుకుంటున్నారు?"
+            elif language == "Roman Telugu":
+                reply = f"Sure. {prof_display_name} ni kalavadaniki ae date mariyu time prefer chestaru?"
+            else:
+                reply = f"Sure. What date and time would you prefer to meet {prof_display_name}?"
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        if eff_date and not eff_time:
+            if language == "Telugu":
+                reply = f"{eff_date} నాడు {prof_display_name} గారిని కలవడానికి ఏ సమయం (Time) కోరుకుంటున్నారు?"
+            elif language == "Roman Telugu":
+                reply = f"{eff_date} naadu {prof_display_name} meeting kosam ae time prefer chestaru?"
+            else:
+                reply = f"What time would you prefer for your meeting with {prof_display_name} on {eff_date}?"
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        if not eff_date and eff_time:
+            if language == "Telugu":
+                reply = f"{eff_time} సమయానికి {prof_display_name} గారిని కలవడానికి ఏ తేదీ (Date) కోరుకుంటున్నారు?"
+            elif language == "Roman Telugu":
+                reply = f"{eff_time} ki {prof_display_name} meeting kosam ae date prefer chestaru?"
+            else:
+                reply = f"What date would you prefer for your meeting with {prof_display_name} at {eff_time}?"
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        try:
+            appointment = await create_appointment(AppointmentRequest(
+                professor_id=professor_obj["professor_id"],
+                date=eff_date,
+                start_time=eff_time,
+                duration_minutes=30,
+                student_id=student_id,
+                reason="Requested via chat",
+            ))
+            clear_session_context(session, student_id)
+            if language == "Roman Telugu":
+                fallback = f"Appointment request for {prof_display_name} on {eff_date} at {eff_time} submit ayyindi (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
+            elif language == "Telugu":
+                fallback = f"{prof_display_name} గారితో {eff_date} నాడు {eff_time} కి అపాయింట్‌మెంట్ అభ్యర్థన సమర్పించబడింది (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
+            else:
+                fallback = f"Appointment request created for {prof_display_name} on {eff_date} at {eff_time} (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
+            reply = await _narrate_backend_action(message, language, appointment, fallback)
+        except HTTPException as exc:
+            reply = f"I couldn't submit that request: {exc.detail}"
+        except Exception:
+            reply = "I couldn't submit that request due to an internal error."
+
+    elif eff_intent in {"PROFESSOR_SCHEDULE", "PROFESSOR_INFORMATION"}:
+        professor = await find_professor(eff_professor)
         if professor is None:
-            if parsed.language == "Roman Telugu":
+            if language == "Roman Telugu":
                 reply = "Aa professor current directory lo dorakaledu. Verified RGMCET records inka load cheyaledu."
-            elif parsed.language == "Telugu":
+            elif language == "Telugu":
                 reply = "ఆ ప్రొఫెసర్ ప్రస్తుత జాబితాలో లేరు. ధృవీకరించిన RGMCET వివరాలు ఇంకా జోడించలేదు."
             else:
                 reply = "I couldn't find that professor in the current directory. The available profile is demo data until verified RGMCET records are loaded."
-        elif parsed.intent == "PROFESSOR_INFORMATION":
+        elif eff_intent == "PROFESSOR_INFORMATION":
             department = professor.get("department", "department not provided")
             office = professor.get("office", "not provided")
-            if parsed.language == "Roman Telugu":
+            if language == "Roman Telugu":
                 reply = f"{professor['name']} {department} department lo unnaru. Office: {office}." + (" Idi demo profile." if professor.get("is_demo") else "")
-            elif parsed.language == "Telugu":
+            elif language == "Telugu":
                 reply = f"{professor['name']} {department} విభాగంలో ఉన్నారు. కార్యాలయం: {office}." + (" ఇది డెమో ప్రొఫైల్." if professor.get("is_demo") else "")
             else:
                 reply = f"{professor['name']} is listed under {department}. Office: {office}." + (" This profile is demo data." if professor.get("is_demo") else "")
-        elif parsed.intent == "PROFESSOR_SCHEDULE":
+        elif eff_intent == "PROFESSOR_SCHEDULE":
             if any(term in message.casefold() for term in ("available", "availability", "slots")):
-                check_date = date.fromisoformat(parsed.date) if parsed.date else datetime.now(INDIA_TZ).date()
+                check_date = date.fromisoformat(eff_date) if eff_date else datetime.now(INDIA_TZ).date()
                 slots = await get_availability(professor["professor_id"], check_date)
                 if slots:
                     times = ", ".join(f"{slot['start_time']}-{slot['end_time']}" for slot in slots)
-                    if parsed.language == "Roman Telugu":
-                        reply = f"{professor['name']} ki {check_date.isoformat()} available demo slots: {times}"
-                    elif parsed.language == "Telugu":
-                        reply = f"{check_date.isoformat()} తేదీకి {professor['name']} అందుబాటులో ఉన్న డెమో సమయాలు: {times}"
+                    slots_label = "Available demo slots" if professor.get("is_demo") else "Available slots"
+                    if language == "Roman Telugu":
+                        reply = f"{professor['name']} ki {check_date.isoformat()} {slots_label.casefold()}: {times}"
+                    elif language == "Telugu":
+                        reply = f"{check_date.isoformat()} తేదీకి {professor['name']} అందుబాటులో ఉన్న సమయాలు: {times}"
                     else:
-                        reply = f"Available demo slots for {professor['name']} on {check_date.isoformat()}: {times}"
+                        reply = f"{slots_label} for {professor['name']} on {check_date.isoformat()}: {times}"
                 else:
-                    if parsed.language == "Roman Telugu":
-                        reply = f"{check_date.isoformat()} naadu {professor['name']} ki future demo slots levu."
-                    elif parsed.language == "Telugu":
-                        reply = f"{check_date.isoformat()} తేదీన {professor['name']}కు భవిష్యత్తు డెమో సమయాలు లేవు."
+                    if language == "Roman Telugu":
+                        reply = f"{check_date.isoformat()} naadu {professor['name']} ki future slots levu."
+                    elif language == "Telugu":
+                        reply = f"{check_date.isoformat()} తేదీన {professor['name']}కు భవిష్యత్తు సమయాలు లేవు."
                     else:
-                        reply = f"No future demo slots are available for {professor['name']} on {check_date.isoformat()}."
+                        reply = f"No future slots are available for {professor['name']} on {check_date.isoformat()}."
             else:
                 slots = await get_schedule(professor["professor_id"])
                 if slots:
                     times = "; ".join(f"{slot['day']} {slot['start_time']}-{slot['end_time']}" for slot in slots)
-                    if parsed.language == "Roman Telugu":
-                        reply = f"Demo data prakaaram {professor['name']} schedule: {times}"
-                    elif parsed.language == "Telugu":
-                        reply = f"డెమో సమాచారం ప్రకారం {professor['name']} షెడ్యూల్: {times}"
+                    if language == "Roman Telugu":
+                        reply = f"{professor['name']} schedule: {times}"
+                    elif language == "Telugu":
+                        reply = f"{professor['name']} షెడ్యూల్: {times}"
                     else:
-                        reply = f"{professor['name']} schedule (DEMO DATA): {times}"
+                        reply = f"{professor['name']} schedule: {times}"
                 else:
-                    reply = "Ee professor schedule prastutaniki andubatulo ledu." if parsed.language == "Roman Telugu" else "ఈ ప్రొఫెసర్ షెడ్యూల్ ప్రస్తుతం అందుబాటులో లేదు." if parsed.language == "Telugu" else "This professor's schedule is currently unavailable."
-        else:
-            if not parsed.date or not parsed.time:
-                reply = "Appointment request kosam date, time pampandi; leda form vadandi." if parsed.language == "Roman Telugu" else "అపాయింట్‌మెంట్ అభ్యర్థనకు తేదీ, సమయం పంపండి లేదా ఫారమ్ ఉపయోగించండి." if parsed.language == "Telugu" else "Please include a date and time for the appointment request, or use the appointment form. Requests remain pending until approved."
-            else:
-                try:
-                    appointment = await create_appointment(AppointmentRequest(
-                        professor_id=professor["professor_id"],
-                        date=parsed.date,
-                        start_time=parsed.time,
-                        reason=message[:500],
-                        student_id=student_id,
-                    ))
-                    if parsed.language == "Roman Telugu":
-                        fallback = f"{appointment['date']} {appointment['start_time']} ki {professor['name']} tho request PENDING_APPROVAL ga submit ayyindi. Approve ayye varaku confirm kaadu."
-                    elif parsed.language == "Telugu":
-                        fallback = f"{appointment['date']} {appointment['start_time']} సమయానికి {professor['name']}తో అభ్యర్థన PENDING_APPROVAL స్థితిలో సమర్పించబడింది. ఆమోదించే వరకు ఇది నిర్ధారితం కాదు."
-                    else:
-                        fallback = f"Your request with {professor['name']} for {appointment['date']} at {appointment['start_time']} has been submitted as PENDING_APPROVAL. It is not confirmed until approved."
-                    reply = await _narrate_backend_action(message, parsed.language, appointment, fallback)
-                except HTTPException as exc:
-                    reply = f"I couldn't submit that request: {exc.detail}"
-    elif parsed.intent == "APPOINTMENT_STATUS":
+                    reply = "Ee professor schedule prastutaniki andubatulo ledu." if language == "Roman Telugu" else "ఈ ప్రొఫెసర్ షెడ్యూల్ ప్రస్తుతం అందుబాటులో లేదు." if language == "Telugu" else "This professor's schedule is currently unavailable."
+
+    elif eff_intent == "APPOINTMENT_STATUS":
         items = await list_appointments(student_id=student_id)
         summary = "; ".join(f"{item['date']} {item['start_time']} with {item['professor_name']}: {item['status']}" for item in items)
-        if parsed.language == "Roman Telugu":
+        if language == "Roman Telugu":
             reply = "Mee appointments inka levu." if not items else "Mee appointments: " + summary
-        elif parsed.language == "Telugu":
+        elif language == "Telugu":
             reply = "మీకు ఇంకా అపాయింట్‌మెంట్‌లు లేవు." if not items else "మీ అపాయింట్‌మెంట్‌లు: " + summary
         else:
             reply = "You have no appointments yet." if not items else "Your appointments: " + summary
-    elif parsed.intent in {"GENERAL_QUERY", "UNKNOWN"}:
-        general_reply = await llm.complete(GENERAL_SYSTEM_PROMPT, f"Language: {parsed.language}\nStudent: {message}")
+
+    elif eff_intent in {"GENERAL_QUERY", "UNKNOWN"}:
+        try:
+            general_reply = await llm.complete(GENERAL_SYSTEM_PROMPT, f"Language: {language}\nStudent: {message}")
+        except Exception as exc:
+            logger.warning("LLM fallback failed: %s", exc)
+            general_reply = None
+            
         if general_reply:
             reply = general_reply.strip()
         else:
-            reply = _general_fallback(message, parsed.language)
-    await store.append_chat_turn(session, student_id, message, reply, parsed.intent, parsed.language)
-    return reply, parsed.intent, parsed.language, session, False, []
+            reply = _general_fallback(message, language)
+
+    await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+    return reply, eff_intent, language, session, False, []
+

@@ -79,10 +79,27 @@ def _language(text: str) -> Literal["English", "Telugu", "Roman Telugu"]:
 def _date(text: str) -> str | None:
     today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
     normalized = text.lower()
-    if "tomorrow" in normalized or "repu" in normalized:
+    if any(term in normalized for term in ("tomorrow", "repu", "రేపు")):
         return (today + timedelta(days=1)).isoformat()
-    if "today" in normalized or "ivala" in normalized:
+    if any(term in normalized for term in ("today", "ivala", "eeroju", "ఈరోజు")):
         return today.isoformat()
+    weekdays = {
+        "monday": 0, "mon": 0, "somavaram": 0, "సోమవారం": 0,
+        "tuesday": 1, "tue": 1, "mangalavaram": 1, "మంగళవారం": 1,
+        "wednesday": 2, "wed": 2, "budhavaram": 2, "బుధవారం": 2,
+        "thursday": 3, "thu": 3, "guruvaram": 3, "గురువారం": 3,
+        "friday": 4, "fri": 4, "shukravaram": 4, "శుక్రవారం": 4,
+        "saturday": 5, "sat": 5, "shanivaram": 5, "శనివారం": 5,
+        "sunday": 6, "sun": 6, "adivaram": 6, "ఆదివారం": 6,
+    }
+    for day_name, target_weekday in weekdays.items():
+        if re.search(r"\b" + day_name + r"\b", normalized, re.I):
+            days_ahead = (target_weekday - today.weekday()) % 7
+            if days_ahead == 0 and "next" in normalized:
+                days_ahead = 7
+            elif days_ahead == 0:
+                return today.isoformat()
+            return (today + timedelta(days=days_ahead)).isoformat()
     named_date = re.search(
         r"\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b",
         normalized,
@@ -113,35 +130,52 @@ def _date(text: str) -> str | None:
 
 
 def _time(text: str) -> str | None:
-    match = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", text, re.I)
-    if not match:
-        return None
-    hour, minute = int(match.group(1)), int(match.group(2) or 0)
-    meridiem = match.group(3).lower()
-    if hour < 1 or hour > 12 or minute > 59:
-        return None
-    hour = hour % 12 + (12 if meridiem == "pm" else 0)
-    return f"{hour:02d}:{minute:02d}"
+    normalized = text.lower()
+    # Check 24-hour format e.g. 14:00, 09:30, 14:00 hrs
+    match_24 = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", normalized)
+    if match_24 and not re.search(r"(am|pm)", normalized):
+        h, m = int(match_24.group(1)), int(match_24.group(2))
+        return f"{h:02d}:{m:02d}"
+    match = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", normalized)
+    if match:
+        hour, minute = int(match.group(1)), int(match.group(2) or 0)
+        meridiem = match.group(3).lower()
+        if 1 <= hour <= 12 and 0 <= minute <= 59:
+            hour = hour % 12 + (12 if meridiem == "pm" else 0)
+            return f"{hour:02d}:{minute:02d}"
+    # Match Roman Telugu / informal e.g. "2 PM ki", "2pm ki", "2 ki"
+    match_ki = re.search(r"\b(\d{1,2})\s*(?:pm|am)?\s*(?:ki|gantalaku|o'clock)\b", normalized)
+    if match_ki:
+        h = int(match_ki.group(1))
+        if 1 <= h <= 12:
+            if "pm" in normalized or (1 <= h <= 7):
+                h = h % 12 + 12
+            return f"{h:02d}:00"
+    return None
 
 
 def detect_web_intent(message: str) -> ParsedIntent:
     text = (message or "").strip()
     lowered = text.lower()
     language = _language(text)
-    professor_match = re.search(
-        r"\b((?:prof(?:essor)?\.?|dr\.?\s*)?[a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,2}\s+(?:sir|madam))\b|\b(?:prof(?:essor)?\.?|dr\.)\s+[a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*)?",
-        text,
-        re.I,
-    )
-    professor = professor_match.group(0).strip() if professor_match else None
-    if professor is None:
-        bare_professor = re.search(
-            r"\b(?:is|show|find|what\s+is)\s+(?!(?:the|a|an)\b)([A-Z][a-z]+)(?:['’]s)?\b",
+    professor = None
+    if re.search(r"\b(cse\s*(?:ds|data\s*science)\s*hod|hod\s*of\s*cse\s*(?:ds|data\s*science))\b", lowered):
+        professor = "Dr. B. Bhaskara Rao"
+    else:
+        professor_match = re.search(
+            r"\b((?:prof(?:essor)?\.?|dr\.?\s*)?[a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,2}\s+(?:sir|madam))\b|\b(?:prof(?:essor)?\.?|dr\.)\s+[a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*)?",
             text,
             re.I,
         )
-        if bare_professor:
-            professor = bare_professor.group(1)
+        professor = professor_match.group(0).strip() if professor_match else None
+        if professor is None:
+            bare_professor = re.search(
+                r"\b(?:is|show|find|what\s+is)\s+(?!(?:the|a|an)\b)([A-Z][a-z]+)(?:['’]s)?\b",
+                text,
+                re.I,
+            )
+            if bare_professor:
+                professor = bare_professor.group(1)
     if professor:
         professor = re.sub(
             r"^(?:(?:what|is|are|the|who|tell|me|about|can|could|may|i|we|want|to|book|schedule|meet|see|with)\s+)+",
@@ -161,7 +195,7 @@ def detect_web_intent(message: str) -> ParsedIntent:
         intent: Intent = "APPOINTMENT_STATUS"
     elif any(term in lowered for term in ("schedule", "available", "availability", "timings enti")) and professor:
         intent = "PROFESSOR_SCHEDULE"
-    elif any(term in lowered for term in ("meet", "appointment", "book", "kalavacha", "kalavali")) and professor:
+    elif any(term in lowered for term in ("meet", "appointment", "book", "kalavacha", "kalavali")):
         intent = "PROFESSOR_APPOINTMENT"
     elif asks_faculty:
         intent = "FACULTY_INFORMATION"

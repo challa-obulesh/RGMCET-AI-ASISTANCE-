@@ -208,20 +208,22 @@ def test_demo_professor_search_and_schedule(client):
 
 
 def test_professor_alias_details_and_availability(client):
+    target_date = future_workday()
+    target_day = date.fromisoformat(target_date).strftime("%A")
     response = client.get("/api/professors/search", params={"q": "Ravi sir"})
     professor = response.json()[0]
     detail = client.get(f"/api/professors/{professor['professor_id']}").json()
     assert detail["department"] and detail["designation"] and detail["office"] and detail["room"]
     assert "subjects" in detail and detail["is_demo"] is True
-    schedule = client.get(f"/api/professors/{professor['professor_id']}/schedule", params={"on_date": "2026-10-01"}).json()
-    assert schedule[0]["day"] == "Thursday"
+    schedule = client.get(f"/api/professors/{professor['professor_id']}/schedule", params={"on_date": target_date}).json()
+    assert schedule[0]["day"] == target_day
     assert schedule[0]["start_time"] == "10:00"
     assert schedule[0]["end_time"] == "16:00"
-    available = client.get(f"/api/professors/{professor['professor_id']}/availability", params={"date": "2026-10-01"})
+    available = client.get(f"/api/professors/{professor['professor_id']}/availability", params={"date": target_date})
     assert available.status_code == 200
     assert "10:00" in [slot["start_time"] for slot in available.json()]
     assert "16:00" not in [slot["start_time"] for slot in available.json()]
-    assert client.get("/api/professors/not-real/availability", params={"date": "2026-10-01"}).status_code == 404
+    assert client.get("/api/professors/not-real/availability", params={"date": target_date}).status_code == 404
 
 
 def test_appointment_conflict_and_approval_flow(client):
@@ -377,7 +379,7 @@ def test_invalid_professor_and_out_of_schedule_appointment_are_rejected(client):
     assert invalid_professor.status_code == 404
     outside_schedule = client.post("/api/appointments", json={
         "professor_id": "PROF-DEMO-001",
-        "date": "2026-10-01",
+        "date": future_workday(),
         "start_time": "16:00",
         "reason": "Outside office hours",
     })
