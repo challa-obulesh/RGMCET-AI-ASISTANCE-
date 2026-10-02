@@ -32,11 +32,11 @@ def _demo_documents() -> dict[str, list[dict[str, Any]]]:
 
 async def init_store() -> None:
     global _client, _database, _memory, _using_demo_store
-    if MONGODB_URI:
+    if MONGODB_URI and not DEMO_MODE:
         try:
             from motor.motor_asyncio import AsyncIOMotorClient
 
-            _client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=2500)
+            _client = AsyncIOMotorClient(MONGODB_URI, serverSelectionTimeoutMS=1000)
             _database = _client[DATABASE_NAME]
             await _client.admin.command("ping")
             # Users (authentication)
@@ -211,3 +211,14 @@ async def append_chat_turn(session_id: str, student_id: str, message: str, reply
         "turns": [turn],
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
+
+
+async def list_chat_sessions(student_id: str) -> list[dict]:
+    query = {"student_id": student_id}
+    sessions = await find_many("chat_sessions", query)
+    sessions.sort(key=lambda s: s.get("updated_at", s.get("created_at", "")), reverse=True)
+    return sessions
+
+
+async def get_chat_session(session_id: str, student_id: str) -> dict | None:
+    return await find_one("chat_sessions", {"session_id": session_id, "student_id": student_id})

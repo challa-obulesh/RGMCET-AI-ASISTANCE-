@@ -1,5 +1,18 @@
 [
   {
+    "professor_id": "PROF-VERIFIED-CSEDS-002",
+    "name": "Dr. B. Bhaskara Rao",
+    "aliases": ["Bhaskara Rao", "B. Bhaskara Rao"],
+    "department": "CSE (Data Science)",
+    "designation": "Assistant Professor",
+    "office": "CSE Department",
+    "room": "CSE-202",
+    "email": "b.bhaskararao@rgmcet.edu.in",
+    "subjects": [],
+    "active": true,
+    "is_demo": true
+  },
+  {
     "professor_id": "PROF-DEMO-001",
     "name": "Ravi Sir (DEMO DATA)",
     "aliases": ["Ravi sir"],

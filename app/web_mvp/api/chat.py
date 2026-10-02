@@ -51,3 +51,22 @@ async def chat(
         verified=verified,
         sources=sources,
     )
+
+
+@router.get("/chat/sessions")
+async def get_chat_sessions(token: dict[str, Any] = Depends(_optional_user)):
+    if not token or token.get("role") not in {"student", "admin"}:
+        raise HTTPException(status_code=401, detail="Only authenticated students can view chat history")
+    student_id = token["sub"]
+    return await store.list_chat_sessions(student_id)
+
+
+@router.get("/chat/sessions/{session_id}")
+async def get_chat_session_details(session_id: str, token: dict[str, Any] = Depends(_optional_user)):
+    if not token or token.get("role") not in {"student", "admin"}:
+        raise HTTPException(status_code=401, detail="Only authenticated students can view chat history")
+    student_id = token["sub"]
+    session = await store.get_chat_session(session_id, student_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Chat session not found")
+    return session

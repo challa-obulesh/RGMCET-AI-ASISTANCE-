@@ -86,6 +86,37 @@ export default function ProfessorDashboard() {
     finally { setBusyId('') }
   }
 
+  const [showSchedule, setShowSchedule] = useState(false)
+  const [schedule, setSchedule] = useState([])
+  const [savingSchedule, setSavingSchedule] = useState(false)
+
+  async function loadSchedule() {
+    if (!user.professor_id) {
+      // Not linked to a faculty profile — show empty schedule they can populate
+      setSchedule([])
+      setShowSchedule(true)
+      return
+    }
+    try {
+      const slots = await api.schedule(user.professor_id)
+      setSchedule(slots)
+      setShowSchedule(true)
+    } catch (err) {
+      // On error (e.g. professor not yet in system), still open modal with empty slots
+      setSchedule([])
+      setShowSchedule(true)
+    }
+  }
+
+  async function saveSchedule() {
+    setSavingSchedule(true)
+    try {
+      await api.updateSchedule(user.professor_id, schedule)
+      setShowSchedule(false)
+    } catch (err) { setError(err.message) }
+    finally { setSavingSchedule(false) }
+  }
+
   const total = pending.length + upcoming.length + history.length
 
   return (
@@ -96,9 +127,14 @@ export default function ProfessorDashboard() {
           <h1>Professor Dashboard</h1>
           <p>Welcome, <strong>{user?.name || 'Professor'}</strong>. Manage your student appointment requests below.</p>
         </div>
-        <button className="icon-button" onClick={load} aria-label="Refresh dashboard" title="Refresh">
-          <RefreshCw size={16} />
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="primary-action" style={{ height: '34px', padding: '0 12px' }} onClick={loadSchedule}>
+            <CalendarCheck size={16} /> Manage Schedule
+          </button>
+          <button className="icon-button" onClick={load} aria-label="Refresh dashboard" title="Refresh">
+            <RefreshCw size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Stats row */}
@@ -202,6 +238,80 @@ export default function ProfessorDashboard() {
             </section>
           )}
         </>
+      )}
+
+      {showSchedule && (
+        <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && setShowSchedule(false)}>
+          <div className="appointment-modal" style={{ width: 'min(500px, 100%)' }}>
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">YOUR AVAILABILITY</p>
+                <h2>Manage Schedule</h2>
+              </div>
+              <button className="icon-button" onClick={() => setShowSchedule(false)}><X size={18} /></button>
+            </div>
+            
+            <div style={{ display: 'grid', gap: '8px', maxHeight: '50vh', overflowY: 'auto', marginBottom: '16px' }}>
+              {schedule.map((slot, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select
+                    style={{ flex: 1, padding: '6px', borderRadius: '4px', border: '1px solid #dfe6dc' }}
+                    value={slot.day}
+                    onChange={(e) => {
+                      const newSched = [...schedule]
+                      newSched[idx].day = e.target.value
+                      setSchedule(newSched)
+                    }}
+                  >
+                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="time"
+                    style={{ padding: '5px', borderRadius: '4px', border: '1px solid #dfe6dc' }}
+                    value={slot.start_time}
+                    onChange={(e) => {
+                      const newSched = [...schedule]
+                      newSched[idx].start_time = e.target.value
+                      setSchedule(newSched)
+                    }}
+                  />
+                  <span>to</span>
+                  <input
+                    type="time"
+                    style={{ padding: '5px', borderRadius: '4px', border: '1px solid #dfe6dc' }}
+                    value={slot.end_time}
+                    onChange={(e) => {
+                      const newSched = [...schedule]
+                      newSched[idx].end_time = e.target.value
+                      setSchedule(newSched)
+                    }}
+                  />
+                  <button
+                    className="icon-button"
+                    style={{ color: '#a34434' }}
+                    onClick={() => setSchedule(schedule.filter((_, i) => i !== idx))}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            
+            <button
+              className="outline-action"
+              onClick={() => setSchedule([...schedule, { day: 'Monday', start_time: '10:00', end_time: '12:00', status: 'AVAILABLE' }])}
+              style={{ marginBottom: '16px' }}
+            >
+              + Add Slot
+            </button>
+
+            <button className="primary-action" style={{ width: '100%' }} onClick={saveSchedule} disabled={savingSchedule}>
+              {savingSchedule ? 'Saving...' : 'Save Schedule'}
+            </button>
+          </div>
+        </div>
       )}
     </section>
   )

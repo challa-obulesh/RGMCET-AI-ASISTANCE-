@@ -164,10 +164,12 @@ def _general_fallback(message: str, language: str) -> str:
 async def classify(message: str) -> ParsedIntent:
     parsed = detect_web_intent(message)
     try:
+        current_time_iso = datetime.now(INDIA_TZ).isoformat()
         content = await llm.complete(
             "Classify the student message for RGMCET. Return only JSON with keys "
             "intent, entity, professor, date, time, language. Do not answer the query, "
-            "invent professor names, or invent facts. Use null for unknown extracted fields.",
+            "invent professor names, or invent facts. Use null for unknown extracted fields.\n"
+            f"Note: Current datetime is {current_time_iso}. Normalize relative dates (like 'tomorrow' or 'next monday') to YYYY-MM-DD. Normalize times to HH:MM.",
             message,
             json_mode=True,
             timeout=8,
@@ -205,6 +207,8 @@ def get_session_context(session_id: str, student_id: str) -> dict[str, Any]:
             "date": None,
             "time": None,
             "language": None,
+            "needs_confirmation": False,
+            "reason": None,
         },
     ).copy()
 
@@ -322,6 +326,32 @@ async def get_schedule(professor_id: str, on_date: date | None = None) -> list[d
     return schedules
 
 
+async def update_professor_schedule(professor_id: str, slots: list[dict]) -> list[dict]:
+    await get_professor(professor_id)
+    # Clear existing schedule for this professor
+    # In MongoDB we would delete_many, for store we can do this:
+    if store._database is not None:
+        await store._database.professor_schedules.delete_many({"professor_id": professor_id})
+    else:
+        store._memory["professor_schedules"] = [
+            s for s in store._memory.get("professor_schedules", [])
+            if s.get("professor_id") != professor_id
+        ]
+    
+    new_schedules = []
+    for slot in slots:
+        new_slot = {
+            "professor_id": professor_id,
+            "day": slot["day"],
+            "start_time": slot["start_time"],
+            "end_time": slot["end_time"],
+            "status": slot["status"]
+        }
+        await store.insert_one("professor_schedules", new_slot)
+        new_schedules.append(new_slot)
+    return new_schedules
+
+
 async def get_availability(professor_id: str, on_date: date) -> list[dict]:
     schedule = await get_schedule(professor_id, on_date)
     appointments = await store.find_many("appointments", {"professor_id": professor_id, "date": on_date.isoformat()})
@@ -371,6 +401,16 @@ async def create_appointment(request: AppointmentRequest) -> dict:
         existing_end = datetime.strptime(existing["end_time"], "%H:%M")
         if start < existing_end and existing_start < end:
             raise HTTPException(status_code=409, detail="That appointment slot is already requested")
+
+    student_overlaps = await store.find_many("appointments", {"student_id": request.student_id, "date": request.date})
+    for existing in student_overlaps:
+        if existing.get("status") not in {"PENDING_APPROVAL", "APPROVED"}:
+            continue
+        existing_start = datetime.strptime(existing["start_time"], "%H:%M")
+        existing_end = datetime.strptime(existing["end_time"], "%H:%M")
+        if start < existing_end and existing_start < end:
+            raise HTTPException(status_code=409, detail="You already have an appointment at this time")
+            
     appointment = await store.insert_appointment({
         "appointment_id": f"APT-{uuid4().hex[:10].upper()}",
         "student_id": request.student_id,
@@ -464,9 +504,12 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
         return reply, "PROFESSOR_APPOINTMENT", language, session, False, []
 
     eff_intent = parsed.intent
-    if ctx.get("intent") == "PROFESSOR_APPOINTMENT" and eff_intent in {"GENERAL_QUERY", "UNKNOWN", "PROFESSOR_APPOINTMENT"}:
-        if eff_professor or parsed.date or parsed.time or any(k in lowered_msg for k in ("meet", "kalavacha", "repu", "tomorrow", "today", "pm", "am")):
+    if ctx.get("intent") == "PROFESSOR_APPOINTMENT" and eff_intent in {"GENERAL_QUERY", "UNKNOWN", "PROFESSOR_APPOINTMENT", "CONFIRMATION", "REJECTION"}:
+        if eff_professor or parsed.date or parsed.time or ctx.get("needs_confirmation") or any(k in lowered_msg for k in ("meet", "kalavacha", "repu", "tomorrow", "today", "pm", "am")):
             eff_intent = "PROFESSOR_APPOINTMENT"
+
+    if ctx.get("needs_confirmation") and parsed.intent in {"CONFIRMATION", "REJECTION"}:
+        eff_intent = "PROFESSOR_APPOINTMENT"
 
     eff_date = parsed.date or ctx.get("date")
     eff_time = parsed.time or ctx.get("time")
@@ -576,27 +619,80 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
             await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
             return reply, eff_intent, language, session, False, []
 
-        try:
-            appointment = await create_appointment(AppointmentRequest(
-                professor_id=professor_obj["professor_id"],
-                date=eff_date,
-                start_time=eff_time,
-                duration_minutes=30,
-                student_id=student_id,
-                reason="Requested via chat",
-            ))
-            clear_session_context(session, student_id)
-            if language == "Roman Telugu":
-                fallback = f"Appointment request for {prof_display_name} on {eff_date} at {eff_time} submit ayyindi (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
-            elif language == "Telugu":
-                fallback = f"{prof_display_name} గారితో {eff_date} నాడు {eff_time} కి అపాయింట్‌మెంట్ అభ్యర్థన సమర్పించబడింది (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
+        if not ctx.get("needs_confirmation"):
+            try:
+                check_date = date.fromisoformat(eff_date)
+                slots = await get_availability(professor_obj["professor_id"], check_date)
+                available = False
+                for s in slots:
+                    if s["start_time"] <= eff_time < s["end_time"]:
+                        available = True
+                        break
+                if not available:
+                    if language == "Telugu":
+                        reply = f"క్షమించండి, {eff_date} నాడు {eff_time} సమయానికి {prof_display_name} గారు అందుబాటులో లేరు. దయచేసి వేరే సమయాన్ని ఎంచుకోండి."
+                    elif language == "Roman Telugu":
+                        reply = f"Sorry, {prof_display_name} ki {eff_date} naadu {eff_time} ki availability ledu. Vere time select cheskondi."
+                    else:
+                        reply = f"Sorry, {prof_display_name} is not available at {eff_time} on {eff_date}. Please choose another time."
+                    update_session_context(session, student_id, {"time": None})
+                    await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+                    return reply, eff_intent, language, session, False, []
+
+                if language == "Telugu":
+                    reply = f"{eff_date} నాడు {eff_time} సమయానికి {prof_display_name} గారు అందుబాటులో ఉన్నారు. నేను అపాయింట్‌మెంట్‌ని అభ్యర్థించమంటారా? (Yes/No)"
+                elif language == "Roman Telugu":
+                    reply = f"{prof_display_name} ki {eff_date} naadu {eff_time} ki availability undi. Nenu appointment request cheymantara? (Yes/No)"
+                else:
+                    reply = f"{prof_display_name} is available at {eff_time} on {eff_date}. Would you like me to request the appointment?"
+                update_session_context(session, student_id, {"needs_confirmation": True})
+                await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+                return reply, eff_intent, language, session, False, []
+            except Exception as exc:
+                logger.warning("Error checking availability: %s", exc)
+
+        if parsed.intent == "REJECTION":
+            if language == "Telugu":
+                reply = "సరే, అపాయింట్‌మెంట్ అభ్యర్థన రద్దు చేయబడింది."
+            elif language == "Roman Telugu":
+                reply = "Sare, appointment request cancel chesanu."
             else:
-                fallback = f"Appointment request created for {prof_display_name} on {eff_date} at {eff_time} (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
-            reply = await _narrate_backend_action(message, language, appointment, fallback)
-        except HTTPException as exc:
-            reply = f"I couldn't submit that request: {exc.detail}"
-        except Exception:
-            reply = "I couldn't submit that request due to an internal error."
+                reply = "Okay, the appointment request has been cancelled."
+            clear_session_context(session, student_id)
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        if parsed.intent == "CONFIRMATION" or lowered_msg.strip() in {"yes", "sure", "ok"}:
+            try:
+                appointment = await create_appointment(AppointmentRequest(
+                    professor_id=professor_obj["professor_id"],
+                    date=eff_date,
+                    start_time=eff_time,
+                    duration_minutes=30,
+                    student_id=student_id,
+                    reason="Requested via chat",
+                ))
+                clear_session_context(session, student_id)
+                if language == "Roman Telugu":
+                    fallback = f"Appointment request for {prof_display_name} on {eff_date} at {eff_time} submit ayyindi (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
+                elif language == "Telugu":
+                    fallback = f"{prof_display_name} గారితో {eff_date} నాడు {eff_time} కి అపాయింట్‌మెంట్ అభ్యర్థన సమర్పించబడింది (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
+                else:
+                    fallback = f"Appointment request created for {prof_display_name} on {eff_date} at {eff_time} (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
+                reply = await _narrate_backend_action(message, language, appointment, fallback)
+            except HTTPException as exc:
+                reply = f"I couldn't submit that request: {exc.detail}"
+                update_session_context(session, student_id, {"needs_confirmation": False, "time": None})
+            except Exception:
+                reply = "I couldn't submit that request due to an internal error."
+                update_session_context(session, student_id, {"needs_confirmation": False})
+        else:
+            if language == "Telugu":
+                reply = "దయచేసి 'Yes' లేదా 'No' ద్వారా నిర్ధారించండి."
+            elif language == "Roman Telugu":
+                reply = "Please 'Yes' leda 'No' tho confirm cheyandi."
+            else:
+                reply = "Please confirm with 'Yes' or 'No'."
 
     elif eff_intent in {"PROFESSOR_SCHEDULE", "PROFESSOR_INFORMATION"}:
         professor = await find_professor(eff_professor)

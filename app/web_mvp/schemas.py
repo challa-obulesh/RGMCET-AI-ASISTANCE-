@@ -42,3 +42,14 @@ class AppointmentRequest(BaseModel):
 
 class AppointmentStatusUpdate(BaseModel):
     status: Literal["APPROVED", "REJECTED", "CANCELLED"]
+
+
+class ScheduleSlot(BaseModel):
+    day: Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    start_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    end_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+    status: Literal["AVAILABLE", "UNAVAILABLE"] = "AVAILABLE"
+
+
+class ScheduleUpdateRequest(BaseModel):
+    slots: list[ScheduleSlot]

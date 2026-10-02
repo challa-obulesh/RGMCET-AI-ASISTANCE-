@@ -45,6 +45,10 @@ export const api = {
 
   // Health
   health: () => request('/health'),
+
+  // Utils
+  get: (path) => request(path),
+  updateSchedule: (id, slots) => request(`/professors/${encodeURIComponent(id)}/schedule`, { method: 'PUT', body: JSON.stringify({ slots }) }),
 }
 
 export const DEMO_STUDENT_ID = 'demo-student'

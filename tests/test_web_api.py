@@ -265,8 +265,17 @@ def test_complete_chat_appointment_request_creates_pending_record(client):
         "message": f"Can I meet Ravi sir on {natural_date} at 10 AM?",
     })
     assert response.status_code == 200
-    assert "PENDING_APPROVAL" in response.json()["message"]
-    assert "not confirmed" in response.json()["message"]
+    assert "Would you like me to request" in response.json()["message"]
+    
+    session_id = response.json()["session_id"]
+    response2 = client.post("/api/chat", json={
+        "message": "Yes",
+        "session_id": session_id
+    })
+    
+    assert response2.status_code == 200
+    assert "PENDING_APPROVAL" in response2.json()["message"]
+    assert "not confirmed" in response2.json()["message"]
     pending = client.get("/api/appointments", params={"status": "PENDING_APPROVAL"})
     assert len(pending.json()) == 1
 

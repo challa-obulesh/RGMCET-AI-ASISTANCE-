@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, Bot, CircleHelp, GraduationCap, LibraryBig, Users, ShieldCheck, Sparkles, Building2 } from 'lucide-react'
 import { api, DEMO_STUDENT_ID } from '../services/api.js'
+import { useAuth } from '../contexts/AuthContext.jsx'
 
 const suggestions = [
   { text: 'What is CSE Data Science?', icon: GraduationCap },
@@ -20,20 +21,47 @@ export default function ChatWindow({ resetKey, activeConversationId, onNewConver
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
+  const { user } = useAuth()
+
   useEffect(() => {
     setValue(''); setError('')
     if (activeConversationId) {
-      try {
-        const saved = JSON.parse(localStorage.getItem(`rgmcet-chat-${activeConversationId}`) || 'null')
-        setMessages(saved?.messages || [])
-        setSessionId(activeConversationId)
-      } catch {
-        setMessages([]); setSessionId(activeConversationId)
+      if (user && user.role === 'student') {
+        setBusy(true)
+        api.get(`/api/chat/sessions/${activeConversationId}`)
+          .then(session => {
+            const mappedMessages = session.turns.flatMap(turn => [
+              { role: 'user', text: turn.user_message },
+              { role: 'assistant', text: turn.assistant_message, intent: turn.intent, language: turn.language }
+            ])
+            setMessages(mappedMessages)
+            setSessionId(activeConversationId)
+            setBusy(false)
+          })
+          .catch(err => {
+            console.error("Failed to load chat session", err)
+            try {
+              const saved = JSON.parse(localStorage.getItem(`rgmcet-chat-${activeConversationId}`) || 'null')
+              setMessages(saved?.messages || [])
+              setSessionId(activeConversationId)
+            } catch {
+              setMessages([]); setSessionId(activeConversationId)
+            }
+            setBusy(false)
+          })
+      } else {
+        try {
+          const saved = JSON.parse(localStorage.getItem(`rgmcet-chat-${activeConversationId}`) || 'null')
+          setMessages(saved?.messages || [])
+          setSessionId(activeConversationId)
+        } catch {
+          setMessages([]); setSessionId(activeConversationId)
+        }
       }
     } else {
       setMessages([]); setSessionId(null)
     }
-  }, [resetKey, activeConversationId])
+  }, [resetKey, activeConversationId, user])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, busy])
   useEffect(() => {
     if (!sessionId || !messages.length) return
@@ -55,7 +83,7 @@ export default function ChatWindow({ resetKey, activeConversationId, onNewConver
     setValue(''); setError(''); setBusy(true)
     if (messages.length === 0) onNewConversation(conversationId, clean)
     try {
-      const result = await api.chat({ message: clean, session_id: conversationId, student_id: DEMO_STUDENT_ID })
+      const result = await api.chat({ message: clean, session_id: conversationId, student_id: (user && user.role === 'student' && user.user_id) ? user.user_id : DEMO_STUDENT_ID })
       setSessionId(result.session_id)
       setMessages((items) => [...items, {
         role: 'assistant',

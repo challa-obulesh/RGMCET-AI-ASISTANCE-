@@ -81,7 +81,7 @@ async def complete(
     user_prompt: str,
     *,
     json_mode: bool = False,
-    timeout: float = 12,
+    timeout: float = 3.0,
 ) -> str | None:
     """Try configured hosted providers in preference order; never raise on outage."""
     for provider in _providers():

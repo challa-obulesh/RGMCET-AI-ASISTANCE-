@@ -25,6 +25,8 @@ Intent = Literal[
     "PROFESSOR_APPOINTMENT",
     "APPOINTMENT_CANCELLATION",
     "APPOINTMENT_STATUS",
+    "CONFIRMATION",
+    "REJECTION",
     "GENERAL_QUERY",
     "UNKNOWN",
 ]
@@ -218,6 +220,10 @@ def detect_web_intent(message: str) -> ParsedIntent:
         intent = "DEPARTMENT_INFORMATION"
     elif any(term in lowered for term in ("college", "rgmcet", "timings", "college timings", "address", "contact", "phone", "email", "founded", "established", "official website")):
         intent = "CAMPUS_INFORMATION"
+    elif re.search(r"^(yes|sure|ok|confirm|yes please|yeah|yup|avunu|sare|sarele|ok andi)\b", lowered, re.I):
+        intent = "CONFIRMATION"
+    elif re.search(r"^(no|cancel|nope|vaddu|oddu|ledu)\b", lowered, re.I):
+        intent = "REJECTION"
     elif text:
         intent = "GENERAL_QUERY"
     else:

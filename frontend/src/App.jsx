@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Menu, PanelLeftClose, Sparkles } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
+import { api } from './services/api.js'
 import Sidebar from './components/Sidebar.jsx'
 import Chat from './pages/Chat.jsx'
 import Professors from './pages/Professors.jsx'
@@ -48,22 +49,33 @@ function AppShell() {
     setSidebarOpen(false)
   }
 
-  // When auth state resolves, redirect if on a page that no longer makes sense
   useEffect(() => {
     if (loading) return
     if (user && (page === 'login' || page === 'register')) {
-      // Redirect to appropriate dashboard
       setPage(user.role === 'professor' ? 'professor' : 'chat')
     }
     if (!user && PROTECTED_PAGES.has(page)) {
       setPage('login')
+    }
+
+    if (user && user.role === 'student') {
+      api.get('/chat/sessions').then(sessions => {
+        if (Array.isArray(sessions) && sessions.length > 0) {
+          setRecentChats(sessions.map(s => ({
+            id: s.session_id,
+            title: s.turns[0]?.user_message?.slice(0, 44) || 'Conversation'
+          })))
+        }
+      }).catch(err => console.error("Failed to load chat sessions", err))
     }
   }, [user, loading, page])
 
   function addRecent(id, title) {
     setRecentChats((items) => {
       const updated = [{ id, title: title.slice(0, 44) }, ...items.filter((item) => item.id !== id)].slice(0, 8)
-      localStorage.setItem('rgmcet-recent-chats', JSON.stringify(updated))
+      if (!user) {
+        localStorage.setItem('rgmcet-recent-chats', JSON.stringify(updated))
+      }
       return updated
     })
   }

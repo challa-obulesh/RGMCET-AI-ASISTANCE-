@@ -301,7 +301,7 @@ class TestNoHallucination:
 class TestAppointmentFlow:
 
     def test_chat_appointment_creates_pending(self, client):
-        """I want to meet professor tomorrow at 10 AM -> PENDING_APPROVAL."""
+        """I want to meet professor tomorrow at 10 AM -> Ask for confirmation -> Yes -> PENDING_APPROVAL."""
         selected = date.fromisoformat(future_workday())
         natural_date = f"{selected.strftime('%B')} {selected.day}"
         response = client.post("/api/chat", json={
@@ -309,8 +309,17 @@ class TestAppointmentFlow:
         })
         data = response.json()
         assert response.status_code == 200
-        assert "PENDING_APPROVAL" in data["message"]
-        assert "not confirmed" in data["message"]
+        assert "Would you like me to request" in data["message"]
+        
+        session_id = data["session_id"]
+        response2 = client.post("/api/chat", json={
+            "message": "Yes",
+            "session_id": session_id
+        })
+        data2 = response2.json()
+        assert response2.status_code == 200
+        assert "PENDING_APPROVAL" in data2["message"]
+        assert "not confirmed" in data2["message"]
 
     def test_appointment_approval_via_api(self, client):
         """Approve appointment changes status to APPROVED."""
@@ -366,8 +375,17 @@ class TestAppointmentFlow:
         })
         data = response.json()
         assert response.status_code == 200
-        assert "PENDING_APPROVAL" in data["message"]
-        msg = data["message"].lower()
+        assert "Would you like me to request" in data["message"]
+        
+        session_id = data["session_id"]
+        response2 = client.post("/api/chat", json={
+            "message": "Yes",
+            "session_id": session_id
+        })
+        data2 = response2.json()
+        assert response2.status_code == 200
+        assert "PENDING_APPROVAL" in data2["message"]
+        msg = data2["message"].lower()
         if "confirmed" in msg:
             assert "not confirmed" in msg or "pending" in msg
 
@@ -470,7 +488,16 @@ class TestLLMGroundedResponse:
         })
         data = response.json()
         assert response.status_code == 200
-        assert "PENDING_APPROVAL" in data["message"]
+        assert "Would you like me to request" in data["message"]
+        
+        session_id = data["session_id"]
+        response2 = llm_client.post("/api/chat", json={
+            "message": "Yes",
+            "session_id": session_id
+        })
+        data2 = response2.json()
+        assert response2.status_code == 200
+        assert "PENDING_APPROVAL" in data2["message"]
 
 
 # ===========================================================================
