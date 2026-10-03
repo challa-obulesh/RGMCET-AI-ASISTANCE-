@@ -32,7 +32,7 @@ async def verify_web_phase5():
     env["DEMO_MODE"] = "true"
     env["MONGODB_URI"] = ""
     backend_proc = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app.web_mvp.main:app", "--host", "0.0.0.0", "--port", "8000"],
+        [sys.executable, "-m", "uvicorn", "app.web_mvp.main:app", "--host", "127.0.0.1", "--port", "8000"],
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -68,7 +68,7 @@ async def verify_web_phase5():
             # SCENARIO 1: Student registration and login
             # ===================================================================
             print("\n--- SCENARIO 1: STUDENT REGISTER & LOGIN ---")
-            await page.goto("http://localhost:5173/")
+            await page.goto("http://127.0.0.1:8000/")
             await page.wait_for_load_state("networkidle")
             title = await page.title()
             print(f"  Page title: {title}")
@@ -247,10 +247,14 @@ async def verify_web_phase5():
 
                 reason_area = page.locator("form.request-form textarea")
                 if await reason_area.count() > 0:
+                    date_input = page.locator("form.request-form input[type='date']")
+                    if await date_input.count() > 0:
+                        await date_input.fill("2026-10-05")
+                        await page.wait_for_timeout(1000)
                     await reason_area.fill("Project review and academic guidance")
                     # Pick first available slot
                     slot_select = page.locator("form.request-form select")
-                    if await slot_select.count() > 0:
+                    if await slot_select.count() > 0 and not await slot_select.is_disabled():
                         await slot_select.select_option(index=1)
                     modal_submit = page.locator("form.request-form button.primary-action")
                     await modal_submit.click()

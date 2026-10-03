@@ -15,15 +15,19 @@ logger = logging.getLogger(__name__)
 # Configuration — read at import time so tests can monkeypatch os.environ
 # ---------------------------------------------------------------------------
 
+from app.web_mvp.config import JWT_EXPIRE_MINUTES as CONFIG_JWT_EXPIRE_MINUTES, JWT_SECRET as CONFIG_JWT_SECRET
+
+
 def _jwt_secret() -> str:
-    return os.environ.get("JWT_SECRET", "rgmcet-dev-jwt-secret-change-in-production")
+    return os.environ.get("JWT_SECRET", CONFIG_JWT_SECRET)
 
 
 def _jwt_expire_minutes() -> int:
     try:
-        return int(os.environ.get("JWT_EXPIRE_MINUTES", "60"))
+        return int(os.environ.get("JWT_EXPIRE_MINUTES", str(CONFIG_JWT_EXPIRE_MINUTES)))
     except ValueError:
         return 60
+
 
 
 _bearer = HTTPBearer(auto_error=False)
