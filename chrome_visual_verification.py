@@ -5,7 +5,7 @@ import time
 async def main():
     print("Starting Chrome visual verification...")
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=False)
         context = await browser.new_context(viewport={"width": 1366, "height": 768})
         page = await context.new_page()
 

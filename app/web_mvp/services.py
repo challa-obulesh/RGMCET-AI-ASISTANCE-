@@ -45,12 +45,14 @@ _conversation_contexts: dict[str, dict[str, Any]] = {}
 def _sources(records: list[dict]) -> list[dict[str, str]]:
     unique: dict[str, dict[str, str]] = {}
     for record in records:
-        url = record.get("source")
+        url = record.get('source')
         if url:
-            title = record.get("title") or record.get("name") or "RGMCET Official Website"
-            unique.setdefault(url, {"title": title, "url": url})
+            title = record.get('title') or record.get('name') or 'RGMCET Official Website'
+            metadata = record.get('_rag_metadata', {})
+            dept = metadata.get('department') or record.get('department') or 'General'
+            date = metadata.get('last_checked') or 'N/A'
+            unique.setdefault(url, {'title': title, 'url': url, 'department': dept, 'last_checked': date})
     return list(unique.values())
-
 
 def _local_verified_answer(records: list[dict], intent: str) -> str:
     if intent == "FACULTY_INFORMATION":
@@ -527,7 +529,7 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
     factual_intents = {"CAMPUS_INFORMATION", "DEPARTMENT_INFORMATION", "FACILITY_INFORMATION", "FACULTY_INFORMATION"}
 
     if eff_intent == "PROFESSOR_INFORMATION" and not parsed.professor and not ctx.get("professor"):
-        official_records = retrieve_verified(message, "FACULTY_INFORMATION", parsed.entity)
+        official_records = await retrieve_verified(message, "FACULTY_INFORMATION", parsed.entity)
         if official_records:
             fallback = _local_verified_answer(official_records, "FACULTY_INFORMATION")
             reply = await _grounded_response(message, language, official_records, fallback)
@@ -535,7 +537,7 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
             return reply, eff_intent, language, session, True, _sources(official_records)
 
     if eff_intent in factual_intents:
-        records = retrieve_verified(message, eff_intent, parsed.entity)
+        records = await retrieve_verified(message, eff_intent, parsed.entity)
         if not records:
             reply = _unavailable_answer(language)
             await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
@@ -769,4 +771,4 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
 
     await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
     return reply, eff_intent, language, session, False, []
-
+

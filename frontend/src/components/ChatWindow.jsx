@@ -136,8 +136,16 @@ export default function ChatWindow({ resetKey, activeConversationId, onNewConver
                 </div>
                 <p>{message.text}</p>
                 {message.verified && message.sources?.length > 0 && <div className="message-sources">
-                  <ShieldCheck size={11} /><span>Official source:</span>
-                  {message.sources.map((source) => <a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.title}</a>)}
+                  <strong><ShieldCheck size={11} /> Verified Sources:</strong>
+                  <ul>
+                    {message.sources.map((source) => (
+                      <li key={source.url}>
+                        <div><strong>Source:</strong> <a href={source.url} target="_blank" rel="noreferrer">{source.title}</a></div>
+                        {source.department && source.department !== 'General' && <div><strong>Department:</strong> {source.department}</div>}
+                        {source.last_checked && source.last_checked !== 'N/A' && <div><strong>Last checked:</strong> {new Date(source.last_checked).toLocaleDateString()}</div>}
+                      </li>
+                    ))}
+                  </ul>
                 </div>}
               </div>
             </article>
