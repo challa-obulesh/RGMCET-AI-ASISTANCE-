@@ -1,223 +1,124 @@
 # RGMCET AI Campus Assistant — Production Deployment Guide
 
-This guide details the procedure to deploy, secure, configure, and operate the RGMCET AI Campus Assistant in a production web environment.
+## Prerequisites
+- Python 3.9+
+- Node.js 18+ (for frontend build)
+- MongoDB (Local or Atlas)
+- LLM API Key (Gemini or OpenAI)
 
----
-
-## 1. Required Software
-
-- **Python**: 3.10 or higher
-- **Node.js**: v18.0.0 or higher
-- **npm**: 9.0.0 or higher
-- **MongoDB**: MongoDB Atlas cluster (MongoDB 6.0+) or self-hosted MongoDB instance
-- **Process Manager**: systemd, Docker, or PM2 / uvicorn / Gunicorn for backend execution
-- **Web Server / Reverse Proxy**: NGINX, Cloudflare, or AWS CloudFront/ALB (for TLS termination & static frontend hosting)
-
----
-
-## 2. Environment Variables
-
-The backend application is configured via environment variables. Copy `.env.example` to `.env` and fill in your production values. **Never commit `.env` or any production secrets to Git.**
+## Environment Variables
 
 ### Backend (`.env`)
+Create a `.env` file in the root directory. NEVER commit this file to version control.
 
-| Variable | Required | Description | Example |
-|---|---|---|---|
-| `LLM_PROVIDER` | Yes | Hosted LLM provider (`gemini` or `openai`) | `gemini` |
-| `GEMINI_API_KEY` | If provider=gemini | Google Gemini API key | `AIzaSy...` |
-| `GEMINI_MODEL` | No | Gemini model name | `gemini-2.0-flash` |
-| `OPENAI_API_KEY` | If provider=openai | OpenAI API key | `sk-proj-...` |
-| `OPENAI_MODEL` | No | OpenAI model name | `gpt-4o-mini` |
-| `MONGODB_URI` | Yes (in Prod) | MongoDB connection string | `mongodb+srv://<user>:<password>@cluster0.xxx.mongodb.net/?retryWrites=true&w=majority` |
-| `DATABASE_NAME` | No | Database name | `rgmcet_ai_assistant` |
-| `JWT_SECRET` | Yes (in Prod) | Cryptographically random secret for JWT signing | `6f8d9a2b4...` (32+ chars) |
-| `JWT_EXPIRE_MINUTES` | No | Token expiration duration (minutes) | `60` |
-| `CORS_ORIGINS` | Yes (in Prod) | Comma-separated list of allowed frontend origins | `https://campus.rgmcet.edu.in` |
-| `DEMO_MODE` | Yes | Set `false` in production for full database persistence | `false` |
+```env
+# ---- LLM Configuration (server-side only) ----
+LLM_PROVIDER=gemini # or openai
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.0-flash
 
-### Frontend (`frontend/.env` or build-time environment)
+# ---- Database ----
+MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
+DATABASE_NAME=rgmcet_ai_assistant
 
-| Variable | Required | Description | Example |
-|---|---|---|---|
-| `VITE_API_BASE_URL` | Yes | Base URL for FastAPI endpoints | `https://api.campus.rgmcet.edu.in/api` |
+# ---- Security ----
+# Generate a secure secret using: python -c "import secrets; print(secrets.token_hex(32))"
+JWT_SECRET=your_super_secret_jwt_key
+JWT_EXPIRE_MINUTES=60
 
----
+# ---- CORS ----
+# Comma-separated list of allowed frontend origins
+CORS_ORIGINS=https://your-production-domain.example
+```
 
-## 3. Local Setup & Verification
+### Frontend (`frontend/.env` or `frontend/.env.local`)
+Create an environment file in the `frontend/` directory.
 
-1. **Clone repository**:
-   ```bash
-   git clone https://github.com/challa-obulesh/RGMCET-AI-ASISTANCE-.git
-   cd RGMCET-AI-ASISTANCE-
-   ```
+```env
+VITE_API_BASE_URL=/api
+```
+*(By default, if served from the same domain by the FastAPI backend, this can just be `/api` or omitted entirely).*
 
-2. **Create Python virtual environment**:
+## Local Setup
+
+### 1. Backend Setup
+1. Clone the repository and navigate to the root directory.
+2. Create a virtual environment:
    ```bash
    python -m venv .venv
-   # Windows:
-   .venv\Scripts\activate
-   # Linux/macOS:
-   source .venv/bin/activate
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
-
-3. **Install Python dependencies**:
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
+4. Set up your `.env` file as described above.
 
-4. **Install Frontend dependencies**:
+### 2. Frontend Setup
+1. Navigate to the `frontend/` directory.
+2. Install dependencies:
    ```bash
-   cd frontend
    npm install
-   cd ..
    ```
 
----
+## Production Deployment Instructions
 
-## 4. Backend Startup
+### 1. Build the Frontend
+From the `frontend/` directory, run:
+```bash
+npm run build
+```
+This generates production-ready static files in the `frontend/dist/` directory.
 
-### Development Mode
+### 2. Start the Backend (with Frontend Served)
+The FastAPI backend is configured to serve the frontend static files automatically if they exist in `frontend/dist/` and no API route matches.
 
-```powershell
-$env:PYTHONPATH="."
-.venv\Scripts\python.exe -m uvicorn app.web_mvp.main:app --host 0.0.0.0 --port 8000 --reload
+Start the FastAPI application using Uvicorn:
+```bash
+uvicorn app.web_mvp.main:app --host 0.0.0.0 --port 8000
 ```
 
-### Production Mode
-
-Using Gunicorn with Uvicorn workers (Linux production environment):
-
+*Note: For production, consider using Gunicorn with Uvicorn workers:*
 ```bash
 gunicorn app.web_mvp.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
----
+## Security Checklist
+- [ ] Ensure `.env` is in `.gitignore` and not committed.
+- [ ] Generate a strong, random `JWT_SECRET`.
+- [ ] Restrict `CORS_ORIGINS` to your actual frontend domain (do not use `*`).
+- [ ] Restrict MongoDB network access to your production server IPs (if using Atlas).
+- [ ] Ensure no API keys or database credentials are included in the frontend source code.
 
-## 5. Frontend Startup & Build
-
-### Development Mode
-
+## Health Endpoint
+To verify the application is running and the database/LLM connections are working:
 ```bash
-cd frontend
-npm run dev
+curl http://your-domain/health
+```
+Response format:
+```json
+{
+  "status": "ok",
+  "demo_mode": false,
+  "database": "connected",
+  "llm_provider": "gemini",
+  "version": "0.3.0"
+}
 ```
 
-### Production Build
+## Troubleshooting
+- **Frontend not loading:** Ensure you ran `npm run build` in the `frontend/` directory and that `frontend/dist/` exists.
+- **CORS errors:** Verify that the frontend URL is exactly matched in `CORS_ORIGINS` in your `.env` file.
+- **Database connection failure:** Check your `MONGODB_URI` and ensure your server IP is allowed in MongoDB Atlas network settings.
+- **LLM errors:** Verify `LLM_PROVIDER` and the corresponding API keys in `.env`. Ensure your API keys have sufficient quota.
 
+## Test Commands
+**Backend Tests:**
 ```bash
-cd frontend
-npm run build
+PYTHONPATH="." pytest tests/ -v
 ```
 
-The compiled static assets will be located in `frontend/dist/`. Serve these assets using NGINX, Cloudflare Pages, Vercel, or AWS S3 + CloudFront.
-
----
-
-## 6. MongoDB Atlas Setup
-
-1. Create a cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
-2. Create a Database User with read/write access to `rgmcet_ai_assistant`.
-3. Network Access: Add IP access rules for your production application server IPs.
-4. Copy the connection string:
-   `mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority`
-5. Set `MONGODB_URI` and `DEMO_MODE=false` in your production backend environment.
-
----
-
-## 7. LLM API Configuration
-
-### Google Gemini (Recommended)
-
-1. Obtain an API key from Google AI Studio.
-2. Set `LLM_PROVIDER=gemini` and `GEMINI_API_KEY=<your-key>`.
-3. Default model: `gemini-2.0-flash`.
-
-### Fallback Behavior
-
-If the hosted LLM API becomes temporarily unavailable or rate-limited, the system automatically falls back to deterministic, grounded local campus information responses without crashing.
-
----
-
-## 8. CORS Configuration
-
-In production, set `CORS_ORIGINS` to match your exact frontend domain(s):
-
-```env
-CORS_ORIGINS=https://rgmcet-ai.edu.in,https://app.rgmcet-ai.edu.in
-```
-
-Do **NOT** use `*` in production.
-
----
-
-## 9. Production Deployment Steps
-
-1. Provision Linux Server (Ubuntu 22.04 LTS / Debian 12) or Container Cluster.
-2. Set up SSL/TLS certificate via Let's Encrypt / certbot or Cloudflare.
-3. Configure systemd service for FastAPI app (`/etc/systemd/system/rgmcet-backend.service`).
-4. Configure NGINX reverse proxy for API requests (`/api`) and static file serving for `frontend/dist`.
-5. Verify health check endpoint at `https://your-domain.com/api/health`.
-
----
-
-## 10. Security Checklist
-
-- [x] All secrets kept in `.env` and environment variables.
-- [x] Passwords hashed using bcrypt.
-- [x] JWT authentication enabled with strong random secret (`JWT_SECRET`).
-- [x] Role-based authorization enforced (Students cannot approve/reject appointments or access professor dashboards).
-- [x] Input parameters validated via Pydantic schemas.
-- [x] Unhandled exceptions produce safe 500 error responses without stack traces.
-- [x] Explicit CORS origin whitelist configured.
-- [x] API key leak prevention verified.
-
----
-
-## 11. Health-Check Endpoint
-
-- **Endpoint**: `GET /api/health` or `GET /health`
-- **Response**:
-  ```json
-  {
-    "status": "ok",
-    "demo_mode": false,
-    "database": "connected",
-    "llm_provider": "gemini",
-    "version": "0.3.0"
-  }
-  ```
-
----
-
-## 12. Troubleshooting
-
-| Issue | Potential Cause | Solution |
-|---|---|---|
-| `503 Service Unavailable` on appointment endpoints | MongoDB connection failed in non-demo mode | Check `MONGODB_URI` and Atlas network access whitelist |
-| `401 Unauthorized` | Missing/expired Bearer token | Ensure user is logged in; refresh token if expired |
-| `403 Forbidden` | Role mismatch | Student attempting professor operation or accessing unauthorized queue |
-| LLM timeout | Network latency or API limit | Application falls back to local knowledge base automatically |
-
----
-
-## 13. How to Run Tests
-
-### Backend Unit & Integration Tests
-
-```powershell
-$env:PYTHONPATH="."
-.venv\Scripts\python.exe -m pytest tests\ -v
-```
-
-### Frontend Build Verification
-
+**Frontend Tests (if applicable):**
 ```bash
-cd frontend
-npm run build
-```
-
-### Playwright E2E Browser Tests
-
-```bash
-npx playwright test
+cd frontend && npm test
 ```
