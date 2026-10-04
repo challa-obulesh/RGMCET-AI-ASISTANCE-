@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CalendarClock, Check, Clock3, RefreshCw, X } from 'lucide-react'
+import { CalendarClock, Check, Clock3, RefreshCw, X, CalendarDays } from 'lucide-react'
 import { api } from '../services/api.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
@@ -25,6 +25,12 @@ function AppointmentCard({ item, onCancel, onDecide, isBusy, showActions }) {
         <span title={item.reason}>{item.reason?.slice(0, 60)}{item.reason?.length > 60 ? '…' : ''}</span>
       </div>
       <StatusPill status={item.status} />
+      {item.calendar_event_id && (
+        <span className="calendar-sync-status" title="Synced to Google Calendar">
+          <CalendarDays size={14} style={{ marginRight: '4px', verticalAlign: 'middle', color: '#4CAF50' }} />
+          <small style={{ color: '#4CAF50' }}>Synced</small>
+        </span>
+      )}
       <div className="row-actions">
         {showActions && item.status === 'PENDING_APPROVAL' && (
           <>

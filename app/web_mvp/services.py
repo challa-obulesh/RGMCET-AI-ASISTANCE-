@@ -15,6 +15,7 @@ from app.web_mvp import store
 from app.web_mvp import llm
 from app.web_mvp.knowledge import retrieve_verified
 from app.web_mvp.schemas import AppointmentRequest
+from app.web_mvp.calendar_service import calendar_service
 
 logger = logging.getLogger(__name__)
 INDIA_TZ = ZoneInfo("Asia/Kolkata")
@@ -439,14 +440,98 @@ async def change_appointment_status(appointment_id: str, status: str) -> dict:
     allowed_from = {"PENDING_APPROVAL"} if status in {"APPROVED", "REJECTED"} else {"PENDING_APPROVAL", "APPROVED"}
     if appointment["status"] not in allowed_from:
         raise HTTPException(status_code=409, detail="Appointment cannot be changed from its current status")
+
+    calendar_event_id = appointment.get("calendar_event_id")
+    if status == "APPROVED":
+        if not calendar_event_id:
+            calendar_event_id = await calendar_service.create_event(appointment)
+    elif status in {"REJECTED", "CANCELLED"}:
+        if calendar_event_id:
+            await calendar_service.delete_event(calendar_event_id)
+
+    fields = {"status": status, "slot_reserved": status in {"PENDING_APPROVAL", "APPROVED"}}
+    if calendar_event_id:
+        fields["calendar_event_id"] = calendar_event_id
+
     updated = await store.transition_appointment(
         appointment_id,
         allowed_from,
-        {"status": status, "slot_reserved": status in {"PENDING_APPROVAL", "APPROVED"}},
+        fields,
     )
     if updated is None:
         raise HTTPException(status_code=409, detail="Appointment was changed by another request")
     logger.info("Appointment %s changed to %s", appointment_id, status)
+    return updated
+
+
+async def reschedule_appointment(appointment_id: str, new_date: str, new_start_time: str) -> dict:
+    appointment = await store.find_one("appointments", {"appointment_id": appointment_id})
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    # We only allow rescheduling an APPROVED or PENDING_APPROVAL appointment
+    if appointment["status"] not in {"APPROVED", "PENDING_APPROVAL"}:
+        raise HTTPException(status_code=409, detail="Only active appointments can be rescheduled")
+
+    try:
+        selected_date = date.fromisoformat(new_date)
+        start = datetime.strptime(new_start_time, "%H:%M")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid appointment date or time") from exc
+        
+    now = datetime.now(INDIA_TZ)
+    slot_start = datetime.combine(selected_date, start.time(), tzinfo=INDIA_TZ)
+    if slot_start <= now or start.minute not in (0, 30):
+        raise HTTPException(status_code=422, detail="Choose a future date and a 30-minute slot")
+        
+    end = start + timedelta(minutes=30)
+    schedule = await get_schedule(appointment["professor_id"], selected_date)
+    is_working = any(
+        block.get("status") == "AVAILABLE"
+        and block["start_time"] <= start.strftime("%H:%M")
+        and block["end_time"] >= end.strftime("%H:%M")
+        for block in schedule
+    )
+    if not is_working:
+        raise HTTPException(status_code=409, detail="The professor is not scheduled for that time")
+        
+    overlaps = await store.find_many("appointments", {"professor_id": appointment["professor_id"], "date": new_date})
+    for existing in overlaps:
+        if existing.get("status") not in {"PENDING_APPROVAL", "APPROVED"} or existing.get("appointment_id") == appointment_id:
+            continue
+        existing_start = datetime.strptime(existing["start_time"], "%H:%M")
+        existing_end = datetime.strptime(existing["end_time"], "%H:%M")
+        if start < existing_end and existing_start < end:
+            raise HTTPException(status_code=409, detail="That appointment slot is already requested")
+
+    student_overlaps = await store.find_many("appointments", {"student_id": appointment["student_id"], "date": new_date})
+    for existing in student_overlaps:
+        if existing.get("status") not in {"PENDING_APPROVAL", "APPROVED"} or existing.get("appointment_id") == appointment_id:
+            continue
+        existing_start = datetime.strptime(existing["start_time"], "%H:%M")
+        existing_end = datetime.strptime(existing["end_time"], "%H:%M")
+        if start < existing_end and existing_start < end:
+            raise HTTPException(status_code=409, detail="You already have an appointment at this time")
+            
+    fields_to_update = {
+        "date": selected_date.isoformat(),
+        "start_time": start.strftime("%H:%M"),
+        "end_time": end.strftime("%H:%M"),
+    }
+    
+    updated = await store.transition_appointment(
+        appointment_id,
+        {"APPROVED", "PENDING_APPROVAL"},
+        fields_to_update,
+    )
+    if updated is None:
+        raise HTTPException(status_code=409, detail="Appointment was changed by another request")
+        
+    calendar_event_id = updated.get("calendar_event_id")
+    if updated["status"] == "APPROVED" and calendar_event_id:
+        await calendar_service.update_event(calendar_event_id, updated)
+        
+    logger.info("Appointment %s rescheduled to %s %s", appointment_id, new_date, new_start_time)
     return updated
 
 

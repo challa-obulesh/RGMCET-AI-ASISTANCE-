@@ -193,6 +193,36 @@ async def cancel(
     return await change_appointment_status(appointment_id, "CANCELLED")
 
 
+@router.patch("/appointments/{appointment_id}/reschedule")
+async def reschedule(
+    appointment_id: str,
+    request: dict,
+    token: dict[str, Any] | None = Depends(_optional_user),
+):
+    from app.web_mvp.schemas import RescheduleRequest
+    try:
+        req = RescheduleRequest(**request)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail="Invalid reschedule request")
+
+    appt = await store.find_one("appointments", {"appointment_id": appointment_id})
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+        
+    # Check permissions (student or professor can reschedule their own)
+    if token:
+        role = token.get("role")
+        if role == "student" and appt.get("student_id") != token.get("sub"):
+            raise HTTPException(status_code=403, detail="You can only reschedule your own appointments")
+        elif role == "professor":
+            prof_id = token.get("professor_id")
+            if prof_id and appt.get("professor_id") != prof_id:
+                raise HTTPException(status_code=403, detail="You can only reschedule your own appointments")
+                
+    from app.web_mvp.services import reschedule_appointment
+    return await reschedule_appointment(appointment_id, req.date, req.start_time)
+
+
 # ---------------------------------------------------------------------------
 # Professor-specific endpoints
 # ---------------------------------------------------------------------------

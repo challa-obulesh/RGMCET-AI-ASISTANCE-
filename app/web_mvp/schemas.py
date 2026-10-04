@@ -44,6 +44,11 @@ class AppointmentStatusUpdate(BaseModel):
     status: Literal["APPROVED", "REJECTED", "CANCELLED"]
 
 
+class RescheduleRequest(BaseModel):
+    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    start_time: str = Field(pattern=r"^\d{2}:\d{2}$")
+
+
 class ScheduleSlot(BaseModel):
     day: Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     start_time: str = Field(pattern=r"^\d{2}:\d{2}$")

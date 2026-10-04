@@ -77,7 +77,7 @@ async def run_verification():
     password = "Password123"
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=False, channel="chrome")
         # Desktop context
         desktop_context = await browser.new_context(viewport={"width": 1366, "height": 768})
         page = await desktop_context.new_page()

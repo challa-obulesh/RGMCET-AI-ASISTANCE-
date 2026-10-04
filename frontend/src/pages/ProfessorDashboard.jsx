@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CalendarCheck, Check, Clock3, GraduationCap, RefreshCw, X } from 'lucide-react'
+import { CalendarCheck, Check, Clock3, GraduationCap, RefreshCw, X, CalendarDays } from 'lucide-react'
 import { api } from '../services/api.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
@@ -203,7 +203,13 @@ export default function ProfessorDashboard() {
                       <strong>{item.student_name || 'Student'}</strong>
                       <span title={item.reason}>{item.reason?.slice(0, 60)}{item.reason?.length > 60 ? '…' : ''}</span>
                     </div>
-                    <span className="status-pill approved">APPROVED</span>
+                    <StatusPill status={item.status} />
+                    {item.calendar_event_id && (
+                      <span className="calendar-sync-status" title="Synced to Google Calendar" style={{ marginLeft: '8px' }}>
+                        <CalendarDays size={14} style={{ marginRight: '4px', verticalAlign: 'middle', color: '#4CAF50' }} />
+                        <small style={{ color: '#4CAF50' }}>Synced</small>
+                      </span>
+                    )}
                     <div className="row-actions" />
                   </article>
                 ))}
@@ -231,6 +237,12 @@ export default function ProfessorDashboard() {
                       <span title={item.reason}>{item.reason?.slice(0, 60)}</span>
                     </div>
                     <StatusPill status={item.status} />
+                    {item.calendar_event_id && (
+                      <span className="calendar-sync-status" title="Synced to Google Calendar" style={{ marginLeft: '8px' }}>
+                        <CalendarDays size={14} style={{ marginRight: '4px', verticalAlign: 'middle', color: '#4CAF50' }} />
+                        <small style={{ color: '#4CAF50' }}>Synced</small>
+                      </span>
+                    )}
                     <div className="row-actions" />
                   </article>
                 ))}
