@@ -98,7 +98,33 @@ async def main():
         await page.set_viewport_size({"width": 390, "height": 844})
         await page.wait_for_timeout(1000)
         await page.screenshot(path="scratch/chrome_09_mobile.png")
-        print("C10 Mobile PASS")
+        print("C09 Mobile PASS")
+        
+        await page.set_viewport_size({"width": 1366, "height": 768})
+        print("Testing Admin Dashboard...")
+        if await page.locator("#logout-button").count() > 0:
+            await page.click("#logout-button")
+            await page.wait_for_timeout(500)
+        if await page.locator("#nav-login").count() > 0:
+            await page.click("#nav-login")
+            await page.wait_for_timeout(500)
+            
+        await page.fill("input[type='email']", "admin@rgmcet.edu.in")
+        await page.fill("input[type='password']", "password123")
+        await page.click("button[type='submit']")
+        await page.wait_for_timeout(2000)
+        
+        if await page.locator("#nav-admin").count() > 0:
+            await page.click("#nav-admin")
+            await page.wait_for_timeout(2000)
+            
+        await page.screenshot(path="scratch/chrome_10_admin_dash.png")
+        print("C10 Admin Dashboard PASS")
+        
+        await page.click("button:has-text('Knowledge')")
+        await page.wait_for_timeout(2000)
+        await page.screenshot(path="scratch/chrome_11_admin_knowledge.png")
+        print("C11 Admin Knowledge PASS")
         
         await browser.close()
         print("Visual verification complete!")

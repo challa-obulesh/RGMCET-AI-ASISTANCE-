@@ -9,6 +9,7 @@ from app.web_mvp.api.appointments import router as appointments_router
 from app.web_mvp.api.auth import router as auth_router
 from app.web_mvp.api.chat import router as chat_router
 from app.web_mvp.api.professors import router as professors_router
+from app.web_mvp.api.admin import router as admin_router
 from app.web_mvp.config import CORS_ORIGINS
 from app.web_mvp.store import close_store, demo_mode_active, init_store, store_ready
 
@@ -37,6 +38,7 @@ app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(professors_router)
 app.include_router(appointments_router)
+app.include_router(admin_router)
 
 
 @app.exception_handler(Exception)

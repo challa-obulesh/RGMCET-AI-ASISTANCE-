@@ -41,6 +41,11 @@ export default function Sidebar({ page, onNavigate, onNewChat, onSelectChat, rec
             <CalendarClock size={17} /> Dashboard
           </button>
         )}
+        {user?.role === 'admin' && (
+          <button id="nav-admin" className={`nav-item ${page === 'admin' ? 'active' : ''}`} onClick={() => onNavigate('admin')}>
+            <LayoutDashboard size={17} /> Admin Panel
+          </button>
+        )}
         <button id="nav-appointments" className={`nav-item ${page === 'appointments' ? 'active' : ''}`} onClick={() => onNavigate('appointments')}>
           <CalendarClock size={17} /> Appointments
         </button>

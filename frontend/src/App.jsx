@@ -10,6 +10,7 @@ import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import StudentDashboard from './pages/StudentDashboard.jsx'
 import ProfessorDashboard from './pages/ProfessorDashboard.jsx'
+import AdminDashboard from './pages/AdminDashboard.jsx'
 
 const pageTitles = {
   chat: 'New conversation',
@@ -17,6 +18,7 @@ const pageTitles = {
   appointments: 'Appointments',
   student: 'My Appointments',
   professor: 'Professor Dashboard',
+  admin: 'Admin Dashboard',
   login: 'Sign in',
   register: 'Create account',
 }
@@ -24,7 +26,7 @@ const pageTitles = {
 // Pages that don't show the sidebar / topbar (full-screen auth pages)
 const AUTH_PAGES = new Set(['login', 'register'])
 // Pages that require authentication
-const PROTECTED_PAGES = new Set(['student', 'professor'])
+const PROTECTED_PAGES = new Set(['student', 'professor', 'admin'])
 
 function AppShell() {
   const { user, loading } = useAuth()
@@ -124,6 +126,7 @@ function AppShell() {
           {page === 'appointments' && <Appointments />}
           {page === 'student' && (user ? <StudentDashboard /> : null)}
           {page === 'professor' && (user?.role === 'professor' ? <ProfessorDashboard /> : null)}
+          {page === 'admin' && (user?.role === 'admin' ? <AdminDashboard /> : null)}
         </main>
       </div>
     </div>

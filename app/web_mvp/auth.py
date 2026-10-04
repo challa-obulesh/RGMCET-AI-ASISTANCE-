@@ -185,3 +185,12 @@ async def require_any_role(
     if role not in {"student", "professor", "admin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     return payload
+
+
+async def require_admin(
+    payload: dict[str, Any] = Depends(_get_current_user_payload),
+) -> dict[str, Any]:
+    """Allow admins only."""
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return payload
