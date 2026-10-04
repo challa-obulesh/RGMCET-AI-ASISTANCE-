@@ -857,3 +857,297 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
     await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
     return reply, eff_intent, language, session, False, []
 
+
+
+async def legacy_answer_chat(message: str, session_id: str | None, student_id: str) -> tuple[str, str, str, str, bool, list[dict[str, str]]]:
+    parsed = await classify(message)
+    session = session_id or f"chat-{uuid4().hex[:12]}"
+    ctx = get_session_context(session, student_id)
+    
+    language = parsed.language
+    if language == "English" and ctx.get("language") in {"Telugu", "Roman Telugu"}:
+        if not re.search(r"[\u0c00-\u0c7f]", message) and not re.search(r"\b(ekkada|enti|unnara|kalavacha|repu|ivala|naaku|undi)\b", message, re.I):
+            language = ctx.get("language")
+
+    lowered_msg = message.casefold()
+    eff_professor = parsed.professor or ctx.get("professor")
+
+    has_pronoun_reference = bool(re.search(r"\b(him|her|he|she|sir|madam|the professor|that professor)\b", lowered_msg))
+    if has_pronoun_reference and not eff_professor and "meet" in lowered_msg:
+        if language == "Telugu":
+            reply = "మీరు ఏ ప్రొఫెసర్‌ని కలవాలనుకుంటున్నారు? దయచేసి పేరు తెలియజేయండి."
+        elif language == "Roman Telugu":
+            reply = "Which professor ni kalavali anukంటున్నారు? Please professor peru cheppandi."
+        else:
+            reply = "Which professor would you like to meet?"
+        update_session_context(session, student_id, {"intent": "PROFESSOR_APPOINTMENT", "language": language})
+        await store.append_chat_turn(session, student_id, message, reply, "PROFESSOR_APPOINTMENT", language)
+        return reply, "PROFESSOR_APPOINTMENT", language, session, False, []
+
+    eff_intent = parsed.intent
+    if ctx.get("intent") == "PROFESSOR_APPOINTMENT" and eff_intent in {"GENERAL_QUERY", "UNKNOWN", "PROFESSOR_APPOINTMENT", "CONFIRMATION", "REJECTION"}:
+        if eff_professor or parsed.date or parsed.time or ctx.get("needs_confirmation") or any(k in lowered_msg for k in ("meet", "kalavacha", "repu", "tomorrow", "today", "pm", "am")):
+            eff_intent = "PROFESSOR_APPOINTMENT"
+
+    if ctx.get("needs_confirmation") and parsed.intent in {"CONFIRMATION", "REJECTION"}:
+        eff_intent = "PROFESSOR_APPOINTMENT"
+
+    eff_date = parsed.date or ctx.get("date")
+    eff_time = parsed.time or ctx.get("time")
+
+    update_session_context(session, student_id, {
+        "intent": eff_intent,
+        "professor": eff_professor,
+        "date": eff_date,
+        "time": eff_time,
+        "language": language,
+    })
+
+    logger.info("Web chat intent=%s (effective=%s) session=%s student=%s", parsed.intent, eff_intent, session, student_id)
+    reply = "I could not find a verified answer for that yet. Please try asking about a listed facility, department, professor, or schedule."
+    factual_intents = {"CAMPUS_INFORMATION", "DEPARTMENT_INFORMATION", "FACILITY_INFORMATION", "FACULTY_INFORMATION"}
+
+    if eff_intent == "PROFESSOR_INFORMATION" and not parsed.professor and not ctx.get("professor"):
+        official_records = await retrieve_verified(message, "FACULTY_INFORMATION", parsed.entity)
+        if official_records:
+            fallback = _local_verified_answer(official_records, "FACULTY_INFORMATION")
+            reply = await _grounded_response(message, language, official_records, fallback)
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, True, _sources(official_records)
+
+    if eff_intent in factual_intents:
+        records = await retrieve_verified(message, eff_intent, parsed.entity)
+        if not records:
+            reply = _unavailable_answer(language)
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+        fallback = _local_verified_answer(records, eff_intent)
+        reply = await _grounded_response(message, language, records, fallback)
+        await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+        return reply, eff_intent, language, session, True, _sources(records)
+
+    if eff_intent == "APPOINTMENT_CANCELLATION":
+        active = [
+            item for item in await list_appointments(student_id=student_id)
+            if item.get("status") in {"PENDING_APPROVAL", "APPROVED"}
+        ]
+        if not active:
+            reply = "You have no pending or approved appointment to cancel."
+        elif len(active) > 1:
+            summary = "; ".join(f"{item['appointment_id']} on {item['date']} at {item['start_time']}" for item in active)
+            reply = f"More than one appointment can be cancelled. Please specify one: {summary}"
+        else:
+            appointment = await change_appointment_status(active[0]["appointment_id"], "CANCELLED")
+            if language == "Roman Telugu":
+                fallback = f"Mee appointment {appointment['appointment_id']} CANCELLED ayyindi."
+            elif language == "Telugu":
+                fallback = f"మీ అపాయింట్‌మెంట్ {appointment['appointment_id']} CANCELLED అయింది."
+            else:
+                fallback = f"Appointment {appointment['appointment_id']} is now CANCELLED."
+            reply = await _narrate_backend_action(message, language, appointment, fallback)
+
+    elif eff_intent == "PROFESSOR_APPOINTMENT":
+        if not eff_professor or lowered_msg.strip() in {"i want to meet a professor", "professor ni kalavali", "kalavali"}:
+            if language == "Telugu":
+                reply = "ఖచ్చితంగా. మీరు ఏ ప్రొఫెసర్‌ని కలవాలనుకుంటున్నారు?"
+            elif language == "Roman Telugu":
+                reply = "Sure. Which professor ni kalavali anukంటున్నారు?"
+            else:
+                reply = "Sure. Which professor would you like to meet?"
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        professor_obj = await find_professor(eff_professor)
+        if professor_obj is None:
+            if language == "Roman Telugu":
+                reply = f"'{eff_professor}' profile current directory lo dorakaledu. Please check the professor name."
+            elif language == "Telugu":
+                reply = f"'{eff_professor}' వివరాలు అందుబాటులో లేవు. దయచేసి ప్రొఫెసర్ పేరును సరిచూడండి."
+            else:
+                reply = f"I couldn't find '{eff_professor}' in the current directory. Please check the professor name."
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        prof_display_name = professor_obj["name"]
+
+        if not eff_date and not eff_time:
+            if language == "Telugu":
+                reply = f"ఖచ్చితంగా. {prof_display_name} గారిని కలవడానికి మీరు ఏ తేదీ మరియు సమయాన్ని కోరుకుంటున్నారు?"
+            elif language == "Roman Telugu":
+                reply = f"Sure. {prof_display_name} ni kalavadaniki ae date mariyu time prefer chestaru?"
+            else:
+                reply = f"Sure. What date and time would you prefer to meet {prof_display_name}?"
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        if eff_date and not eff_time:
+            if language == "Telugu":
+                reply = f"{eff_date} నాడు {prof_display_name} గారిని కలవడానికి ఏ సమయం (Time) కోరుకుంటున్నారు?"
+            elif language == "Roman Telugu":
+                reply = f"{eff_date} naadu {prof_display_name} meeting kosam ae time prefer chestaru?"
+            else:
+                reply = f"What time would you prefer for your meeting with {prof_display_name} on {eff_date}?"
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        if not eff_date and eff_time:
+            if language == "Telugu":
+                reply = f"{eff_time} సమయానికి {prof_display_name} గారిని కలవడానికి ఏ తేదీ (Date) కోరుకుంటున్నారు?"
+            elif language == "Roman Telugu":
+                reply = f"{eff_time} ki {prof_display_name} meeting kosam ae date prefer chestaru?"
+            else:
+                reply = f"What date would you prefer for your meeting with {prof_display_name} at {eff_time}?"
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        if not ctx.get("needs_confirmation"):
+            try:
+                check_date = date.fromisoformat(eff_date)
+                slots = await get_availability(professor_obj["professor_id"], check_date)
+                available = False
+                for s in slots:
+                    if s["start_time"] <= eff_time < s["end_time"]:
+                        available = True
+                        break
+                if not available:
+                    if language == "Telugu":
+                        reply = f"క్షమించండి, {eff_date} నాడు {eff_time} సమయానికి {prof_display_name} గారు అందుబాటులో లేరు. దయచేసి వేరే సమయాన్ని ఎంచుకోండి."
+                    elif language == "Roman Telugu":
+                        reply = f"Sorry, {prof_display_name} ki {eff_date} naadu {eff_time} ki availability ledu. Vere time select cheskondi."
+                    else:
+                        reply = f"Sorry, {prof_display_name} is not available at {eff_time} on {eff_date}. Please choose another time."
+                    update_session_context(session, student_id, {"time": None})
+                    await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+                    return reply, eff_intent, language, session, False, []
+
+                if language == "Telugu":
+                    reply = f"{eff_date} నాడు {eff_time} సమయానికి {prof_display_name} గారు అందుబాటులో ఉన్నారు. నేను అపాయింట్‌మెంట్‌ని అభ్యర్థించమంటారా? (Yes/No)"
+                elif language == "Roman Telugu":
+                    reply = f"{prof_display_name} ki {eff_date} naadu {eff_time} ki availability undi. Nenu appointment request cheymantara? (Yes/No)"
+                else:
+                    reply = f"{prof_display_name} is available at {eff_time} on {eff_date}. Would you like me to request the appointment?"
+                update_session_context(session, student_id, {"needs_confirmation": True})
+                await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+                return reply, eff_intent, language, session, False, []
+            except Exception as exc:
+                logger.warning("Error checking availability: %s", exc)
+
+        if parsed.intent == "REJECTION":
+            if language == "Telugu":
+                reply = "సరే, అపాయింట్‌మెంట్ అభ్యర్థన రద్దు చేయబడింది."
+            elif language == "Roman Telugu":
+                reply = "Sare, appointment request cancel chesanu."
+            else:
+                reply = "Okay, the appointment request has been cancelled."
+            clear_session_context(session, student_id)
+            await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+            return reply, eff_intent, language, session, False, []
+
+        if parsed.intent == "CONFIRMATION" or lowered_msg.strip() in {"yes", "sure", "ok"}:
+            try:
+                appointment = await create_appointment(AppointmentRequest(
+                    professor_id=professor_obj["professor_id"],
+                    date=eff_date,
+                    start_time=eff_time,
+                    duration_minutes=30,
+                    student_id=student_id,
+                    reason="Requested via chat",
+                ))
+                clear_session_context(session, student_id)
+                if language == "Roman Telugu":
+                    fallback = f"Appointment request for {prof_display_name} on {eff_date} at {eff_time} submit ayyindi (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
+                elif language == "Telugu":
+                    fallback = f"{prof_display_name} గారితో {eff_date} నాడు {eff_time} కి అపాయింట్‌మెంట్ అభ్యర్థన సమర్పించబడింది (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
+                else:
+                    fallback = f"Appointment request created for {prof_display_name} on {eff_date} at {eff_time} (ID: {appointment['appointment_id']}, status: PENDING_APPROVAL - not confirmed)."
+                reply = await _narrate_backend_action(message, language, appointment, fallback)
+            except HTTPException as exc:
+                reply = f"I couldn't submit that request: {exc.detail}"
+                update_session_context(session, student_id, {"needs_confirmation": False, "time": None})
+            except Exception:
+                reply = "I couldn't submit that request due to an internal error."
+                update_session_context(session, student_id, {"needs_confirmation": False})
+        else:
+            if language == "Telugu":
+                reply = "దయచేసి 'Yes' లేదా 'No' ద్వారా నిర్ధారించండి."
+            elif language == "Roman Telugu":
+                reply = "Please 'Yes' leda 'No' tho confirm cheyandi."
+            else:
+                reply = "Please confirm with 'Yes' or 'No'."
+
+    elif eff_intent in {"PROFESSOR_SCHEDULE", "PROFESSOR_INFORMATION"}:
+        professor = await find_professor(eff_professor)
+        if professor is None:
+            if language == "Roman Telugu":
+                reply = "Aa professor current directory lo dorakaledu. Verified RGMCET records inka load cheyaledu."
+            elif language == "Telugu":
+                reply = "ఆ ప్రొఫెసర్ ప్రస్తుత జాబితాలో లేరు. ధృవీకరించిన RGMCET వివరాలు ఇంకా జోడించలేదు."
+            else:
+                reply = "I couldn't find that professor in the current directory. The available profile is demo data until verified RGMCET records are loaded."
+        elif eff_intent == "PROFESSOR_INFORMATION":
+            department = professor.get("department", "department not provided")
+            office = professor.get("office", "not provided")
+            if language == "Roman Telugu":
+                reply = f"{professor['name']} {department} department lo unnaru. Office: {office}." + (" Idi demo profile." if professor.get("is_demo") else "")
+            elif language == "Telugu":
+                reply = f"{professor['name']} {department} విభాగంలో ఉన్నారు. కార్యాలయం: {office}." + (" ఇది డెమో ప్రొఫైల్." if professor.get("is_demo") else "")
+            else:
+                reply = f"{professor['name']} is listed under {department}. Office: {office}." + (" This profile is demo data." if professor.get("is_demo") else "")
+        elif eff_intent == "PROFESSOR_SCHEDULE":
+            if any(term in message.casefold() for term in ("available", "availability", "slots")):
+                check_date = date.fromisoformat(eff_date) if eff_date else datetime.now(INDIA_TZ).date()
+                slots = await get_availability(professor["professor_id"], check_date)
+                if slots:
+                    times = ", ".join(f"{slot['start_time']}-{slot['end_time']}" for slot in slots)
+                    slots_label = "Available demo slots" if professor.get("is_demo") else "Available slots"
+                    if language == "Roman Telugu":
+                        reply = f"{professor['name']} ki {check_date.isoformat()} {slots_label.casefold()}: {times}"
+                    elif language == "Telugu":
+                        reply = f"{check_date.isoformat()} తేదీకి {professor['name']} అందుబాటులో ఉన్న సమయాలు: {times}"
+                    else:
+                        reply = f"{slots_label} for {professor['name']} on {check_date.isoformat()}: {times}"
+                else:
+                    if language == "Roman Telugu":
+                        reply = f"{check_date.isoformat()} naadu {professor['name']} ki future slots levu."
+                    elif language == "Telugu":
+                        reply = f"{check_date.isoformat()} తేదీన {professor['name']}కు భవిష్యత్తు సమయాలు లేవు."
+                    else:
+                        reply = f"No future slots are available for {professor['name']} on {check_date.isoformat()}."
+            else:
+                slots = await get_schedule(professor["professor_id"])
+                if slots:
+                    times = "; ".join(f"{slot['day']} {slot['start_time']}-{slot['end_time']}" for slot in slots)
+                    if language == "Roman Telugu":
+                        reply = f"{professor['name']} schedule: {times}"
+                    elif language == "Telugu":
+                        reply = f"{professor['name']} షెడ్యూల్: {times}"
+                    else:
+                        reply = f"{professor['name']} schedule: {times}"
+                else:
+                    reply = "Ee professor schedule prastutaniki andubatulo ledu." if language == "Roman Telugu" else "ఈ ప్రొఫెసర్ షెడ్యూల్ ప్రస్తుతం అందుబాటులో లేదు." if language == "Telugu" else "This professor's schedule is currently unavailable."
+
+    elif eff_intent == "APPOINTMENT_STATUS":
+        items = await list_appointments(student_id=student_id)
+        summary = "; ".join(f"{item['date']} {item['start_time']} with {item['professor_name']}: {item['status']}" for item in items)
+        if language == "Roman Telugu":
+            reply = "Mee appointments inka levu." if not items else "Mee appointments: " + summary
+        elif language == "Telugu":
+            reply = "మీకు ఇంకా అపాయింట్‌మెంట్‌లు లేవు." if not items else "మీ అపాయింట్‌మెంట్‌లు: " + summary
+        else:
+            reply = "You have no appointments yet." if not items else "Your appointments: " + summary
+
+    elif eff_intent in {"GENERAL_QUERY", "UNKNOWN"}:
+        try:
+            general_reply = await llm.complete(GENERAL_SYSTEM_PROMPT, f"Language: {language}\nStudent: {message}")
+        except Exception as exc:
+            logger.warning("LLM fallback failed: %s", exc)
+            general_reply = None
+            
+        if general_reply:
+            reply = general_reply.strip()
+        else:
+            reply = _general_fallback(message, language)
+
+    await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
+    return reply, eff_intent, language, session, False, []
+
