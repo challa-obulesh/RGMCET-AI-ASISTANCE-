@@ -38,7 +38,7 @@ Available Tools:
 {tools}
 """
 
-async def run_agent(message: str, session_id: str, student_id: str) -> tuple[str, str, str, str, bool, list[dict]]:
+async def _run_agent_internal(message: str, session_id: str, student_id: str) -> tuple[str, str, str, str, bool, list[dict]]:
     """Runs the agent loop and returns the final response tuple."""
     # Retrieve context
     session = await store.get_chat_session(session_id, student_id)
@@ -128,6 +128,13 @@ async def run_agent(message: str, session_id: str, student_id: str) -> tuple[str
     await store.append_chat_turn(session_id, student_id, message, final_reply, final_intent, final_language)
     
     return final_reply, final_intent, final_language, session_id, verified, unique_sources
+
+async def run_agent(message: str, session_id: str, student_id: str) -> tuple[str, str, str, str, bool, list[dict]]:
+    try:
+        return await _run_agent_internal(message, session_id, student_id)
+    except Exception as e:
+        logger.error(f"Agent failed with error: {e}")
+        return "I am currently experiencing technical difficulties. Please try again later.", "UNKNOWN", "English", session_id if session_id else "error", False, []
 
 
 async def _deterministic_fallback(message: str, session_id: str, student_id: str) -> tuple:

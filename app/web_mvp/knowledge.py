@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -50,63 +51,106 @@ async def retrieve_verified(
     if allowed_kinds:
         filters["allowed_kinds"] = allowed_kinds
         
-    # Query vector store (fetch more for re-ranking)
-    results = store.search(query_emb, top_k=50, threshold=0.01, filters=filters)
-    
+    # Query vector store and candidates for hybrid re-ranking
+    candidates = store.documents
+    if allowed_kinds:
+        candidates = [d for d in candidates if d.get("kind") in allowed_kinds]
+
+    # Precalculate vector similarities if query_emb is available
+    vec_scores: dict[str, float] = {}
+    if query_emb:
+        def cosine_sim(v1: list[float], v2: list[float]) -> float:
+            dot = sum(a * b for a, b in zip(v1, v2))
+            m1 = math.sqrt(sum(a * a for a in v1))
+            m2 = math.sqrt(sum(b * b for b in v2))
+            return (dot / (m1 * m2)) if (m1 > 0 and m2 > 0) else 0.0
+
+        for doc in candidates:
+            doc_emb = doc.get("embedding")
+            doc_id = str(doc.get("id") or doc.get("source") or "")
+            if doc_emb:
+                vec_scores[doc_id] = max(0.0, cosine_sim(query_emb, doc_emb))
+
     # Re-ranking using hybrid metadata boosting to preserve exact match logic
     lowered_query = combined_query.casefold()
     ranked = []
     
     # Handle broad lists specially just like Phase 5 did
-    is_broad_dept = intent == "DEPARTMENT_INFORMATION" and ("department" in lowered_query or "branch" in lowered_query or "విభాగాలు" in lowered_query or "శాఖలు" in lowered_query) and not entity
+    is_broad_dept = intent == "DEPARTMENT_INFORMATION" and ("department" in lowered_query or "branch" in lowered_query or "విభాగాలు" in lowered_query or "శాఖలు" in lowered_query) and (not entity or entity == "RGMCET")
     is_broad_fac = intent == "FACILITY_INFORMATION" and ("facilit" in lowered_query or "సదుపాయాలు" in lowered_query) and not entity
     is_broad_prof = intent == "FACULTY_INFORMATION" and ("faculty" in lowered_query or "staff" in lowered_query) and "hod" not in lowered_query
     
-    if is_broad_dept or is_broad_fac or is_broad_prof:
-        # Just return everything allowed to emulate list fetch
-        results = store.documents
-        if filters:
-            results = [d for d in results if d.get("kind") in allowed_kinds]
-        for d in results:
-            ranked.append((1.0, d))
+    if is_broad_dept:
+        for d in candidates:
+            if d.get("kind") == "department":
+                ranked.append((1.0, d))
+    elif is_broad_fac:
+        for d in candidates:
+            if d.get("kind") == "facility":
+                ranked.append((1.0, d))
+    elif is_broad_prof:
+        for d in candidates:
+            if d.get("kind") == "faculty":
+                ranked.append((1.0, d))
     else:
-        for doc in results:
-            score = 1.0
+        for doc in candidates:
+            doc_id = str(doc.get("id") or doc.get("source") or "")
+            score = 1.0 + vec_scores.get(doc_id, 0.0) * 2.0
             record = doc.get("original_record", {})
             searchable = str(record).casefold()
+            title_name = f"{record.get('title', '')} {record.get('name', '')} {record.get('department', '')}".casefold()
             
             # Boost exact entity matches
-            if entity and entity.casefold() in searchable:
-                score += 5.0
+            if entity:
+                ent_lower = entity.casefold()
+                if ent_lower in title_name:
+                    score += 25.0
+                elif ent_lower in searchable:
+                    score += 15.0
+
+            # Boost specific department queries (e.g. CSE Data Science)
+            if "cse" in lowered_query or "data science" in lowered_query:
+                if "data science" in title_name or "cseds" in searchable:
+                    score += 30.0
                 
             # Boost HOD if asked
             if intent == "FACULTY_INFORMATION":
                 if doc.get("kind") == "faculty":
                     score += 1.0
                 if ("hod" in lowered_query or "head" in lowered_query) and record.get("is_hod"):
-                    score += 10.0
+                    score += 30.0
                     
             # Boost library if asked
-            if "library" in lowered_query and "library" in searchable:
-                score += 5.0
+            if ("library" in lowered_query or "గ్రంథాలయం" in lowered_query or "granthalayam" in lowered_query) and "library" in searchable:
+                score += 30.0
+
+            # Boost laboratory if asked
+            if ("laboratory" in lowered_query or "lab" in lowered_query) and ("laboratory" in searchable or "lab" in searchable):
+                score += 25.0
+
+            # Boost campus/college general info
+            if intent == "CAMPUS_INFORMATION" or "about rgmcet" in lowered_query or "tell me about" in lowered_query:
+                if doc.get("kind") == "college":
+                    score += 20.0
                 
             ranked.append((score, doc))
             
     ranked.sort(key=lambda x: x[0], reverse=True)
     
-    # DEBUG PRINT
-    for s, d in ranked[:5]:
-        r = d.get('original_record', {})
-        print(f"DEBUG RANKED: {r.get('name') or r.get('title')} - Score: {s}")
-    
+    # If no keywords matched and similarity is baseline 1.0 for specific intent, return empty
+    if not (is_broad_dept or is_broad_fac or is_broad_prof) and ranked and ranked[0][0] <= 1.0:
+        return []
+
     final_records = []
     # If it was a broad query, return all matches, else top 1 (as in Phase 6)
     limit = len(ranked) if (is_broad_dept or is_broad_fac or is_broad_prof) else 1
     
     for score, doc in ranked[:limit]:
-        record = doc.get("original_record", {})
+        record = dict(doc.get("original_record", {}))
         # inject kind and metadata for LLM tracing
         record["kind"] = doc.get("kind")
+        if doc.get("source_url") and not record.get("source", "").startswith("http"):
+            record["source"] = doc.get("source_url")
         record["_rag_metadata"] = {
             "source": doc.get("source"),
             "source_url": doc.get("source_url"),

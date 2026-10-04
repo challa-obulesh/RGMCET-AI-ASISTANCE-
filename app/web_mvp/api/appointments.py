@@ -155,6 +155,28 @@ async def _assert_professor_owns_appointment(appointment_id: str, token: dict[st
     return appt
 
 
+async def _audit_appointment_event(token: dict[str, Any] | None, action: str, appointment_id: str, status_str: str) -> None:
+    from datetime import datetime, timezone
+    user_id = token.get("sub", "anonymous") if token else "anonymous"
+    user_email = token.get("email", "") if token else ""
+    role = token.get("role", "unknown") if token else "unknown"
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "admin_id": user_id,
+        "admin_email": user_email,
+        "user_role": role,
+        "action": action,
+        "target_type": "appointment",
+        "target_id": str(appointment_id),
+        "result": f"status={status_str}",
+    }
+    try:
+        import asyncio
+        asyncio.create_task(store.insert_one("audit_logs", entry))
+    except RuntimeError:
+        store._memory.setdefault("audit_logs", []).append(entry)
+
+
 @router.post("/appointments/{appointment_id}/approve")
 async def approve(
     appointment_id: str,
@@ -164,7 +186,9 @@ async def approve(
         raise HTTPException(status_code=403, detail="Students cannot approve appointments")
     if token and token.get("role") == "professor":
         await _assert_professor_owns_appointment(appointment_id, token)
-    return await change_appointment_status(appointment_id, "APPROVED")
+    result = await change_appointment_status(appointment_id, "APPROVED")
+    await _audit_appointment_event(token, "APPROVE_APPOINTMENT", appointment_id, "APPROVED")
+    return result
 
 
 @router.post("/appointments/{appointment_id}/reject")
@@ -176,7 +200,9 @@ async def reject(
         raise HTTPException(status_code=403, detail="Students cannot reject appointments")
     if token and token.get("role") == "professor":
         await _assert_professor_owns_appointment(appointment_id, token)
-    return await change_appointment_status(appointment_id, "REJECTED")
+    result = await change_appointment_status(appointment_id, "REJECTED")
+    await _audit_appointment_event(token, "REJECT_APPOINTMENT", appointment_id, "REJECTED")
+    return result
 
 
 @router.post("/appointments/{appointment_id}/cancel")
@@ -190,7 +216,9 @@ async def cancel(
     # Student can only cancel their own
     if token and token.get("role") == "student" and appt.get("student_id") != token["sub"]:
         raise HTTPException(status_code=403, detail="You can only cancel your own appointments")
-    return await change_appointment_status(appointment_id, "CANCELLED")
+    result = await change_appointment_status(appointment_id, "CANCELLED")
+    await _audit_appointment_event(token, "CANCEL_APPOINTMENT", appointment_id, "CANCELLED")
+    return result
 
 
 @router.patch("/appointments/{appointment_id}/reschedule")

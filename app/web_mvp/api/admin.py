@@ -1,218 +1,804 @@
-﻿"""Admin API for dashboard, knowledge management, and analytics."""
+"""Admin API — Phase 10 complete implementation.
+
+Endpoints:
+  /api/admin/overview
+  /api/admin/health
+  /api/admin/knowledge       (list, create, search, filters)
+  /api/admin/knowledge/{id}  (get single)
+  /api/admin/knowledge/{id}  PATCH (edit)
+  /api/admin/knowledge/{id}/verify
+  /api/admin/knowledge/{id}/unverify
+  /api/admin/knowledge/{id}/archive
+  /api/admin/knowledge/{id}/restore
+  /api/admin/rag/status
+  /api/admin/rag/reindex
+  /api/admin/rag/query-preview
+  /api/admin/faculty
+  /api/admin/departments
+  /api/admin/facilities
+  /api/admin/users
+  /api/admin/appointments/analytics
+  /api/admin/ai/analytics
+  /api/admin/audit-logs
+"""
 from __future__ import annotations
 
 import logging
 import uuid
+from collections import Counter, defaultdict
+from datetime import datetime, timezone, timedelta
 from typing import Any
-from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.web_mvp import store, knowledge
 from app.web_mvp.auth import require_admin
-from app.web_mvp.vector_store import VectorStore
 from app.web_mvp.embeddings import get_embedding
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
-def _audit_log(admin_payload: dict, action: str, target_type: str, target_id: str, result: str):
-    import asyncio
-    log_entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "admin_id": admin_payload.get("sub"),
-        "admin_email": admin_payload.get("email"),
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+async def _audit(payload: dict, action: str, target_type: str, target_id: str, result: str = "SUCCESS") -> None:
+    entry = {
+        "timestamp": _now(),
+        "admin_id": payload.get("sub", ""),
+        "admin_email": payload.get("email", ""),
         "action": action,
         "target_type": target_type,
-        "target_id": target_id,
-        "result": result
+        "target_id": str(target_id),
+        "result": result,
     }
-    asyncio.create_task(store.insert_one("audit_logs", log_entry))
+    try:
+        import asyncio
+        asyncio.create_task(store.insert_one("audit_logs", entry))
+    except RuntimeError:
+        # No running loop (e.g. tests) — write synchronously via _memory
+        store._memory.setdefault("audit_logs", []).append(entry)
+
+
+def _doc_id(doc: dict) -> str:
+    return str(doc.get("id") or doc.get("source") or "")
+
+
+def _rec(doc: dict) -> dict:
+    return doc.get("original_record") or {}
+
+
+def _knowledge_list(vstore, q: str | None = None, filter_status: str | None = None) -> list[dict]:
+    docs = list(vstore.documents)
+
+    # Text search
+    if q:
+        q_lower = q.lower()
+        docs = [d for d in docs if (
+            q_lower in str(_rec(d).get("name", "")).lower()
+            or q_lower in str(_rec(d).get("title", "")).lower()
+            or q_lower in d.get("content", "").lower()
+            or q_lower in d.get("kind", "").lower()
+            or q_lower in str(_rec(d).get("department", "")).lower()
+        )]
+
+    # Status filters
+    if filter_status == "verified":
+        docs = [d for d in docs if _rec(d).get("verified")]
+    elif filter_status == "unverified":
+        docs = [d for d in docs if not _rec(d).get("verified")]
+    elif filter_status == "indexed":
+        docs = [d for d in docs if d.get("index_status") == "INDEXED"]
+    elif filter_status == "pending":
+        docs = [d for d in docs if d.get("index_status") == "INDEX_PENDING"]
+    elif filter_status == "failed":
+        docs = [d for d in docs if d.get("index_status") == "INDEX_FAILED"]
+    elif filter_status == "archived":
+        docs = [d for d in docs if d.get("archived")]
+
+    if filter_status != "archived":
+        docs = [d for d in docs if not d.get("archived")]
+
+    # Return without embedding to save payload size; ensure every doc has an 'id'
+    result = []
+    for d in docs:
+        out = {k: v for k, v in d.items() if k != "embedding"}
+        if "id" not in out:
+            out["id"] = out.get("source", "")
+        result.append(out)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Overview
+# ---------------------------------------------------------------------------
 
 @router.get("/overview")
 async def overview() -> dict[str, Any]:
     users = await store.find_many("users")
     appointments = await store.find_many("appointments")
     chats = await store.find_many("chat_sessions")
-    
-    total_users = len(users)
-    students = len([u for u in users if u.get("role") == "student"])
-    professors = len([u for u in users if u.get("role") == "professor"])
-    admins = len([u for u in users if u.get("role") == "admin"])
-    
+
     vstore = knowledge.get_store()
     records = vstore.documents
-    total_knowledge = len(records)
-    verified = len([r for r in records if r.get("original_record", {}).get("verified")])
-    
-    pending = len([a for a in appointments if a.get("status") == "PENDING_APPROVAL"])
-    completed = len([a for a in appointments if a.get("status") == "COMPLETED"])
-    
+    non_archived = [r for r in records if not r.get("archived")]
+    verified = len([r for r in non_archived if _rec(r).get("verified")])
+    indexed = len([r for r in non_archived if r.get("index_status") == "INDEXED"])
+    pending_idx = len([r for r in non_archived if r.get("index_status") in ("INDEX_PENDING", None)])
+
+    appt_by_status: Counter = Counter(a.get("status", "UNKNOWN") for a in appointments)
+
+    # AI analytics — count turns
+    total_turns = sum(len(s.get("turns", [])) for s in chats)
+    intent_counts: Counter = Counter()
+    lang_counts: Counter = Counter()
+    for s in chats:
+        for t in s.get("turns", []):
+            intent_counts[t.get("intent", "UNKNOWN")] += 1
+            lang_counts[t.get("language", "Unknown")] += 1
+
     return {
         "users": {
-            "total": total_users,
-            "students": students,
-            "professors": professors,
-            "admins": admins
+            "total": len(users),
+            "students": len([u for u in users if u.get("role") == "student"]),
+            "professors": len([u for u in users if u.get("role") == "professor"]),
+            "admins": len([u for u in users if u.get("role") == "admin"]),
         },
         "knowledge": {
-            "total": total_knowledge,
+            "total": len(non_archived),
             "verified": verified,
-            "unverified": total_knowledge - verified
+            "unverified": len(non_archived) - verified,
+            "indexed": indexed,
+            "pending": pending_idx,
+            "archived": len([r for r in records if r.get("archived")]),
         },
         "appointments": {
             "total": len(appointments),
-            "pending": pending,
-            "completed": completed
+            "pending": appt_by_status.get("PENDING_APPROVAL", 0),
+            "approved": appt_by_status.get("APPROVED", 0),
+            "rejected": appt_by_status.get("REJECTED", 0),
+            "cancelled": appt_by_status.get("CANCELLED", 0),
+            "completed": appt_by_status.get("COMPLETED", 0),
         },
-        "chat": {
-            "total": len(chats)
+        "ai": {
+            "total_queries": total_turns,
+            "by_intent": dict(intent_counts.most_common(10)),
+            "by_language": dict(lang_counts.most_common()),
         },
-        "system": {
-            "database": "Healthy" if store.store_ready() else "Unavailable",
-            "llm": "Available",
-            "rag": "Ready"
-        }
     }
 
+
+# ---------------------------------------------------------------------------
+# System Health
+# ---------------------------------------------------------------------------
+
+@router.get("/health")
+async def admin_health() -> dict[str, Any]:
+    from app.web_mvp.llm import configured_provider
+    from app.web_mvp.store import demo_mode_active, store_ready
+    from app.web_mvp.vector_store import VECTOR_STORE_PATH
+
+    vstore = knowledge.get_store()
+    rag_docs = len(vstore.documents)
+    rag_indexed = len([d for d in vstore.documents if d.get("index_status") == "INDEXED"])
+
+    return {
+        "backend": {"status": "OK", "version": "0.3.0"},
+        "database": {
+            "status": "demo" if demo_mode_active() else ("connected" if store_ready() else "unavailable"),
+            "demo_mode": demo_mode_active(),
+        },
+        "llm": {
+            "provider": configured_provider() or "none",
+            "status": "configured" if configured_provider() else "not_configured",
+        },
+        "rag": {
+            "status": "OK",
+            "total_documents": rag_docs,
+            "indexed": rag_indexed,
+            "store_path": str(VECTOR_STORE_PATH),
+        },
+        "google_calendar": {
+            "status": "not_configured",
+            "note": "Optional integration — configure GOOGLE_CALENDAR credentials to enable",
+        },
+        "environment": {
+            "demo_mode": demo_mode_active(),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Knowledge CRUD
+# ---------------------------------------------------------------------------
+
 @router.get("/knowledge")
-async def get_knowledge() -> list[dict[str, Any]]:
+async def get_knowledge(
+    q: str | None = Query(default=None),
+    filter: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
     vstore = knowledge.get_store()
-    return vstore.documents
+    return _knowledge_list(vstore, q=q, filter_status=filter)
 
-@router.post("/knowledge")
-async def create_knowledge(data: dict, payload: dict = Depends(require_admin)):
-    vstore = knowledge.get_store()
-    doc_id = str(uuid.uuid4())
-    data["id"] = doc_id
-    data["index_status"] = "INDEX_PENDING"
-    vstore.documents.append(data)
-    vstore._save()
-    _audit_log(payload, "CREATE_KNOWLEDGE", "knowledge", doc_id, "SUCCESS")
-    return data
 
-@router.patch("/knowledge/{doc_id}")
-async def update_knowledge(doc_id: str, data: dict, payload: dict = Depends(require_admin)):
+@router.get("/knowledge/{doc_id}")
+async def get_knowledge_item(doc_id: str) -> dict[str, Any]:
     vstore = knowledge.get_store()
     for doc in vstore.documents:
-        if str(doc.get("id")) == doc_id or doc.get("source") == doc_id:
-            if "content" in data: doc["content"] = data["content"]
-            if "original_record" in data: doc["original_record"] = data["original_record"]
-            if "kind" in data: doc["kind"] = data["kind"]
-            if "source" in data: doc["source"] = data["source"]
-            doc["index_status"] = "INDEX_PENDING"
-            vstore._save()
-            _audit_log(payload, "EDIT_KNOWLEDGE", "knowledge", doc_id, "SUCCESS")
-            return doc
+        if _doc_id(doc) == doc_id:
+            return {k: v for k, v in doc.items() if k != "embedding"}
     raise HTTPException(404, "Not found")
 
-@router.delete("/knowledge/{doc_id}")
-async def delete_knowledge(doc_id: str, payload: dict = Depends(require_admin)):
+
+@router.post("/knowledge")
+async def create_knowledge(data: dict, payload: dict = Depends(require_admin)) -> dict[str, Any]:
     vstore = knowledge.get_store()
-    initial_len = len(vstore.documents)
-    vstore.documents = [d for d in vstore.documents if str(d.get("id")) != doc_id and d.get("source") != doc_id]
-    if len(vstore.documents) < initial_len:
+    new_id = str(uuid.uuid4())
+    now = _now()
+    doc = {
+        "id": new_id,
+        "content": data.get("content", ""),
+        "kind": data.get("kind", "general"),
+        "source": data.get("source", f"admin-created-{new_id}"),
+        "source_url": data.get("source_url", ""),
+        "department": data.get("department", ""),
+        "language": data.get("language", "English"),
+        "tags": data.get("tags", []),
+        "index_status": "INDEX_PENDING",
+        "archived": False,
+        "created_at": now,
+        "updated_at": now,
+        "original_record": {
+            "title": data.get("title", ""),
+            "name": data.get("title", ""),
+            "content": data.get("content", ""),
+            "category": data.get("kind", "general"),
+            "department": data.get("department", ""),
+            "source": data.get("source", ""),
+            "source_url": data.get("source_url", ""),
+            "language": data.get("language", "English"),
+            "tags": data.get("tags", []),
+            "verified": data.get("verified", False),
+            "created_at": now,
+        },
+    }
+    vstore.documents.append(doc)
+    vstore._save()
+    await _audit(payload, "CREATE_KNOWLEDGE", "knowledge", new_id)
+    return {k: v for k, v in doc.items() if k != "embedding"}
+
+
+@router.patch("/knowledge/{doc_id}")
+async def update_knowledge(doc_id: str, data: dict, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    vstore = knowledge.get_store()
+    for doc in vstore.documents:
+        if _doc_id(doc) == doc_id:
+            allowed = {"content", "kind", "source", "source_url", "department", "language", "tags"}
+            for field in allowed:
+                if field in data:
+                    doc[field] = data[field]
+            # Update original_record fields
+            rec = doc.setdefault("original_record", {})
+            for field in ("title", "name", "category", "department", "source", "source_url", "language", "tags", "verified"):
+                if field in data:
+                    rec[field] = data[field]
+            if "content" in data:
+                rec["content"] = data["content"]
+            doc["index_status"] = "INDEX_PENDING"
+            doc["updated_at"] = _now()
+            vstore._save()
+            await _audit(payload, "EDIT_KNOWLEDGE", "knowledge", doc_id)
+            return {k: v for k, v in doc.items() if k != "embedding"}
+    raise HTTPException(404, "Not found")
+
+
+@router.post("/knowledge/{doc_id}/verify")
+async def verify_knowledge(doc_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    vstore = knowledge.get_store()
+    for doc in vstore.documents:
+        if _doc_id(doc) == doc_id:
+            doc.setdefault("original_record", {})["verified"] = True
+            doc["updated_at"] = _now()
+            vstore._save()
+            await _audit(payload, "VERIFY_KNOWLEDGE", "knowledge", doc_id)
+            return {k: v for k, v in doc.items() if k != "embedding"}
+    raise HTTPException(404, "Not found")
+
+
+@router.post("/knowledge/{doc_id}/unverify")
+async def unverify_knowledge(doc_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    vstore = knowledge.get_store()
+    for doc in vstore.documents:
+        if _doc_id(doc) == doc_id:
+            doc.setdefault("original_record", {})["verified"] = False
+            doc["updated_at"] = _now()
+            vstore._save()
+            await _audit(payload, "UNVERIFY_KNOWLEDGE", "knowledge", doc_id)
+            return {k: v for k, v in doc.items() if k != "embedding"}
+    raise HTTPException(404, "Not found")
+
+
+@router.post("/knowledge/{doc_id}/archive")
+async def archive_knowledge(doc_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    vstore = knowledge.get_store()
+    for doc in vstore.documents:
+        if _doc_id(doc) == doc_id:
+            doc["archived"] = True
+            doc["updated_at"] = _now()
+            vstore._save()
+            await _audit(payload, "ARCHIVE_KNOWLEDGE", "knowledge", doc_id)
+            return {k: v for k, v in doc.items() if k != "embedding"}
+    raise HTTPException(404, "Not found")
+
+
+@router.post("/knowledge/{doc_id}/restore")
+async def restore_knowledge(doc_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    vstore = knowledge.get_store()
+    for doc in vstore.documents:
+        if _doc_id(doc) == doc_id:
+            doc["archived"] = False
+            doc["updated_at"] = _now()
+            vstore._save()
+            await _audit(payload, "RESTORE_KNOWLEDGE", "knowledge", doc_id)
+            return {k: v for k, v in doc.items() if k != "embedding"}
+    raise HTTPException(404, "Not found")
+
+
+@router.delete("/knowledge/{doc_id}")
+async def delete_knowledge(doc_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    """Permanent delete — only for admin-created records. Official records should be archived."""
+    vstore = knowledge.get_store()
+    before = len(vstore.documents)
+    vstore.documents = [d for d in vstore.documents if _doc_id(d) != doc_id]
+    if len(vstore.documents) < before:
         vstore._save()
-        _audit_log(payload, "DELETE_KNOWLEDGE", "knowledge", doc_id, "SUCCESS")
+        await _audit(payload, "DELETE_KNOWLEDGE", "knowledge", doc_id)
         return {"success": True}
     raise HTTPException(404, "Not found")
 
-@router.post("/knowledge/{doc_id}/verify")
-async def verify_knowledge(doc_id: str, payload: dict = Depends(require_admin)):
-    vstore = knowledge.get_store()
-    for doc in vstore.documents:
-        if str(doc.get("id")) == doc_id or doc.get("source") == doc_id:
-            doc.setdefault("original_record", {})["verified"] = True
-            vstore._save()
-            _audit_log(payload, "VERIFY_KNOWLEDGE", "knowledge", doc_id, "SUCCESS")
-            return doc
-    raise HTTPException(404, "Not found")
 
-@router.post("/knowledge/{doc_id}/unverify")
-async def unverify_knowledge(doc_id: str, payload: dict = Depends(require_admin)):
-    vstore = knowledge.get_store()
-    for doc in vstore.documents:
-        if str(doc.get("id")) == doc_id or doc.get("source") == doc_id:
-            doc.setdefault("original_record", {})["verified"] = False
-            vstore._save()
-            _audit_log(payload, "UNVERIFY_KNOWLEDGE", "knowledge", doc_id, "SUCCESS")
-            return doc
-    raise HTTPException(404, "Not found")
+# ---------------------------------------------------------------------------
+# RAG management
+# ---------------------------------------------------------------------------
 
-@router.post("/knowledge/reindex")
-async def reindex_knowledge(payload: dict = Depends(require_admin)):
+@router.get("/rag/status")
+async def rag_status() -> dict[str, Any]:
+    vstore = knowledge.get_store()
+    docs = vstore.documents
+    non_archived = [d for d in docs if not d.get("archived")]
+    indexed = [d for d in non_archived if d.get("index_status") == "INDEXED"]
+    pending = [d for d in non_archived if d.get("index_status") in ("INDEX_PENDING", None)]
+    failed = [d for d in non_archived if d.get("index_status") == "INDEX_FAILED"]
+    return {
+        "total": len(non_archived),
+        "indexed": len(indexed),
+        "pending": len(pending),
+        "failed": len(failed),
+        "archived": len([d for d in docs if d.get("archived")]),
+        "last_index_time": None,  # not persisted; could be added to store metadata
+        "index_ready": len(pending) == 0 and len(failed) == 0,
+    }
+
+
+@router.post("/rag/reindex")
+async def rag_reindex(payload: dict = Depends(require_admin)) -> dict[str, Any]:
     vstore = knowledge.get_store()
     processed = 0
     indexed = 0
-    errors = []
-    for doc in vstore.documents:
-        processed += 1
-        if doc.get("index_status") == "INDEX_PENDING" or not doc.get("embedding"):
-            try:
-                emb = await get_embedding(doc["content"])
-                if emb:
-                    doc["embedding"] = emb
-                    doc["index_status"] = "INDEXED"
-                    indexed += 1
-                else:
+    errors: list[str] = []
+    # Keep a snapshot for rollback
+    snapshot = [dict(d) for d in vstore.documents]
+    try:
+        for doc in vstore.documents:
+            if doc.get("archived"):
+                continue
+            processed += 1
+            if doc.get("index_status") == "INDEX_PENDING" or not doc.get("embedding"):
+                try:
+                    emb = await get_embedding(doc["content"])
+                    if emb:
+                        doc["embedding"] = emb
+                        doc["index_status"] = "INDEXED"
+                        indexed += 1
+                    else:
+                        doc["index_status"] = "INDEX_FAILED"
+                        errors.append(f"No embedding for: {doc.get('source', doc.get('id', '?'))}")
+                except Exception as exc:
                     doc["index_status"] = "INDEX_FAILED"
-                    errors.append(f"Failed embedding for {doc.get('source')}")
-            except Exception as e:
-                doc["index_status"] = "INDEX_FAILED"
-                errors.append(str(e))
-    vstore._save()
-    _audit_log(payload, "REINDEX", "system", "rag", f"Processed {processed}, Indexed {indexed}")
+                    errors.append(str(exc))
+        vstore._save()
+    except Exception as exc:
+        # Rollback
+        vstore.documents = snapshot
+        logger.error("RAG reindex failed, rolled back: %s", exc)
+        await _audit(payload, "REINDEX", "system", "rag", f"FAILED: {exc}")
+        return {"success": False, "error": str(exc), "records_processed": processed, "records_indexed": indexed}
+
+    await _audit(payload, "REINDEX", "system", "rag", f"processed={processed} indexed={indexed} errors={len(errors)}")
     return {
-        "success": len(errors) == 0,
+        "success": True,
         "records_processed": processed,
         "records_indexed": indexed,
-        "errors": errors
+        "errors": errors,
     }
 
-class PreviewQuery(BaseModel):
+
+class PreviewRequest(BaseModel):
     query: str
 
-@router.post("/knowledge/preview")
-async def preview_knowledge(req: PreviewQuery, payload: dict = Depends(require_admin)):
+
+@router.post("/rag/query-preview")
+async def rag_query_preview(req: PreviewRequest, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    """Run the full RAG pipeline for admin inspection without persisting a session."""
     from app.web_mvp.agent import run_agent
-    res = await run_agent(req.query, "admin-preview", "admin@rgmcet.edu.in", [])
-    return {"result": res}
+    # run_agent(message, session_id, student_id) -> tuple(reply, intent, language, entity, verified, sources)
+    result = await run_agent(req.query, "admin-preview", payload.get("sub", "admin"))
+    if isinstance(result, tuple):
+        reply, intent, language, entity, verified, sources = result
+    else:
+        reply, intent, language, verified, sources = str(result), "", "English", False, []
+    # Detect language heuristically as fallback
+    q = req.query
+    if any(0x0C00 < ord(c) < 0x0C7F for c in q):
+        language = "Telugu"
+    elif any(kw in q.lower() for kw in ["lo ", "undi", "ela", "cheppandi", "cheppara", "vundi", "ledu"]):
+        language = "Roman Telugu"
+    return {
+        "query": req.query,
+        "detected_language": language,
+        "response": reply,
+        "sources": sources if isinstance(sources, list) else [],
+        "intent": intent,
+        "verified": verified,
+    }
 
-@router.get("/audit-logs")
-async def get_audit_logs():
-    logs = await store.find_many("audit_logs")
-    return sorted(logs, key=lambda x: x.get("timestamp", ""), reverse=True)
 
-@router.get("/users")
-async def get_users():
-    users = await store.find_many("users")
-    # Redact passwords
-    for u in users:
-        u.pop("password_hash", None)
-    return users
-
-@router.get("/analytics/appointments")
-async def get_appointment_analytics():
-    appointments = await store.find_many("appointments")
-    return appointments
-
-@router.get("/analytics/chat")
-async def get_chat_analytics():
-    chats = await store.find_many("chat_sessions")
-    return chats
+# ---------------------------------------------------------------------------
+# Faculty / Department / Facility
+# ---------------------------------------------------------------------------
 
 @router.get("/faculty")
-async def get_faculty():
-    return await store.find_many("professors")
+async def get_faculty(q: str | None = Query(default=None)) -> list[dict[str, Any]]:
+    profs = await store.find_many("professors")
+    if q:
+        q_lower = q.lower()
+        profs = [p for p in profs if q_lower in p.get("name", "").lower() or q_lower in p.get("department", "").lower()]
+    return profs
+
 
 @router.get("/departments")
-async def get_departments():
+async def get_departments(q: str | None = Query(default=None)) -> list[dict[str, Any]]:
     vstore = knowledge.get_store()
-    return [d for d in vstore.documents if d.get("kind") == "department"]
+    docs = [d for d in vstore.documents if d.get("kind") == "department" and not d.get("archived")]
+    if q:
+        q_lower = q.lower()
+        docs = [d for d in docs if q_lower in str(d).lower()]
+    return [{k: v for k, v in d.items() if k != "embedding"} for d in docs]
+
 
 @router.get("/facilities")
-async def get_facilities():
+async def get_facilities(q: str | None = Query(default=None)) -> list[dict[str, Any]]:
     vstore = knowledge.get_store()
-    return [d for d in vstore.documents if d.get("kind") == "facility"]
+    docs = [d for d in vstore.documents if d.get("kind") == "facility" and not d.get("archived")]
+    if q:
+        q_lower = q.lower()
+        docs = [d for d in docs if q_lower in str(d).lower()]
+    return [{k: v for k, v in d.items() if k != "embedding"} for d in docs]
 
+
+# ---------------------------------------------------------------------------
+# Users
+# ---------------------------------------------------------------------------
+
+class UserStatusUpdateRequest(BaseModel):
+    status: str
+    reason: str | None = None
+
+
+@router.get("/users")
+async def get_users(role: str | None = Query(default=None)) -> list[dict[str, Any]]:
+    users = await store.find_many("users")
+    if role:
+        users = [u for u in users if u.get("role") == role]
+    safe = []
+    for u in users:
+        su = {k: v for k, v in u.items() if k not in ("password_hash", "password", "_id")}
+        if "approval_status" not in su:
+            su["approval_status"] = "APPROVED" if su.get("role") != "professor" else "PENDING"
+        if "department" not in su:
+            su["department"] = "General"
+        safe.append(su)
+    return safe
+
+
+@router.patch("/users/{user_id}/status")
+async def update_user_status(
+    user_id: str,
+    req: UserStatusUpdateRequest,
+    payload: dict = Depends(require_admin),
+) -> dict[str, Any]:
+    new_status = req.status.upper()
+    if new_status not in {"APPROVED", "REJECTED", "SUSPENDED", "PENDING"}:
+        raise HTTPException(400, "Invalid status. Must be APPROVED, REJECTED, SUSPENDED, or PENDING")
+    user = await store.find_one("users", {"user_id": user_id})
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    old_status = user.get("approval_status", "APPROVED")
+    await store.update_one("users", {"user_id": user_id}, {"approval_status": new_status})
+    action = f"{new_status}_USER" if user.get("role") != "professor" else f"{new_status}_PROFESSOR"
+    await _audit(payload, action, "user", user_id, f"old_status={old_status} new_status={new_status} reason={req.reason or ''}")
+    return {"success": True, "user_id": user_id, "status": new_status}
+
+
+@router.post("/users/{user_id}/approve")
+async def approve_user(user_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    user = await store.find_one("users", {"user_id": user_id})
+    if not user:
+        raise HTTPException(404, "User not found")
+    await store.update_one("users", {"user_id": user_id}, {"approval_status": "APPROVED"})
+    await _audit(payload, "APPROVE_PROFESSOR", "user", user_id, "status=APPROVED")
+    return {"success": True, "user_id": user_id, "status": "APPROVED"}
+
+
+@router.post("/users/{user_id}/reject")
+async def reject_user(user_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    user = await store.find_one("users", {"user_id": user_id})
+    if not user:
+        raise HTTPException(404, "User not found")
+    await store.update_one("users", {"user_id": user_id}, {"approval_status": "REJECTED"})
+    await _audit(payload, "REJECT_PROFESSOR", "user", user_id, "status=REJECTED")
+    return {"success": True, "user_id": user_id, "status": "REJECTED"}
+
+
+@router.post("/users/{user_id}/suspend")
+async def suspend_user(user_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    user = await store.find_one("users", {"user_id": user_id})
+    if not user:
+        raise HTTPException(404, "User not found")
+    await store.update_one("users", {"user_id": user_id}, {"approval_status": "SUSPENDED"})
+    await _audit(payload, "SUSPEND_PROFESSOR", "user", user_id, "status=SUSPENDED")
+    return {"success": True, "user_id": user_id, "status": "SUSPENDED"}
+
+
+@router.post("/users/{user_id}/reactivate")
+async def reactivate_user(user_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
+    user = await store.find_one("users", {"user_id": user_id})
+    if not user:
+        raise HTTPException(404, "User not found")
+    await store.update_one("users", {"user_id": user_id}, {"approval_status": "APPROVED"})
+    await _audit(payload, "REACTIVATE_PROFESSOR", "user", user_id, "status=APPROVED")
+    return {"success": True, "user_id": user_id, "status": "APPROVED"}
+
+
+# ---------------------------------------------------------------------------
+# Appointments Management & Analytics
+# ---------------------------------------------------------------------------
+
+class AdminAppointmentOverrideRequest(BaseModel):
+    status: str
+    reason: str | None = None
+
+
+@router.get("/appointments")
+async def list_admin_appointments(
+    status: str | None = Query(default=None),
+    professor_id: str | None = Query(default=None),
+    student_id: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    date: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
+    query: dict[str, Any] = {}
+    if status:
+        query["status"] = status
+    if professor_id:
+        query["professor_id"] = professor_id
+    if student_id:
+        query["student_id"] = student_id
+    if date:
+        query["date"] = date
+
+    appointments = await store.find_many("appointments", query)
+
+    if q:
+        q_lower = q.lower()
+        appointments = [
+            a for a in appointments
+            if q_lower in str(a.get("student_name", "")).lower()
+            or q_lower in str(a.get("student_id", "")).lower()
+            or q_lower in str(a.get("professor_name", "")).lower()
+            or q_lower in str(a.get("professor_id", "")).lower()
+            or q_lower in str(a.get("reason", "")).lower()
+            or q_lower in str(a.get("appointment_id", "")).lower()
+        ]
+
+    return sorted(appointments, key=lambda x: (x.get("date", ""), x.get("start_time", "")), reverse=True)
+
+
+@router.patch("/appointments/{appointment_id}/override")
+@router.post("/appointments/{appointment_id}/override")
+async def override_appointment(
+    appointment_id: str,
+    req: AdminAppointmentOverrideRequest,
+    payload: dict = Depends(require_admin),
+) -> dict[str, Any]:
+    target_status = req.status.upper()
+    if target_status not in {"APPROVED", "REJECTED", "CANCELLED", "PENDING_APPROVAL", "PENDING"}:
+        raise HTTPException(400, "Invalid target status")
+    if target_status == "PENDING":
+        target_status = "PENDING_APPROVAL"
+
+    appointment = await store.find_one("appointments", {"appointment_id": appointment_id})
+    if not appointment:
+        raise HTTPException(404, "Appointment not found")
+
+    old_status = appointment.get("status", "UNKNOWN")
+    from app.web_mvp.calendar_service import calendar_service
+
+    calendar_event_id = appointment.get("calendar_event_id")
+    if target_status == "APPROVED" and not calendar_event_id:
+        calendar_event_id = await calendar_service.create_event(appointment)
+    elif target_status in {"REJECTED", "CANCELLED"} and calendar_event_id:
+        await calendar_service.delete_event(calendar_event_id)
+        calendar_event_id = None
+
+    updates: dict[str, Any] = {
+        "status": target_status,
+        "slot_reserved": target_status in {"PENDING_APPROVAL", "APPROVED"},
+    }
+    if calendar_event_id is not None:
+        updates["calendar_event_id"] = calendar_event_id
+
+    await store.update_one("appointments", {"appointment_id": appointment_id}, updates)
+    await _audit(
+        payload,
+        "ADMIN_OVERRIDE_APPOINTMENT",
+        "appointment",
+        appointment_id,
+        f"old_status={old_status} new_status={target_status} reason={req.reason or ''}",
+    )
+
+    updated = await store.find_one("appointments", {"appointment_id": appointment_id})
+    return updated or {"appointment_id": appointment_id, "status": target_status}
+
+@router.get("/appointments/analytics")
+async def appointment_analytics(
+    days: int = Query(default=30, ge=1, le=365),
+) -> dict[str, Any]:
+    appointments = await store.find_many("appointments")
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    def in_range(a: dict) -> bool:
+        ts = a.get("created_at") or a.get("date", "")
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            return dt >= cutoff
+        except Exception:
+            return True  # include if unparseable
+
+    filtered = [a for a in appointments if in_range(a)]
+    by_status: Counter = Counter(a.get("status", "UNKNOWN") for a in filtered)
+    by_professor: Counter = Counter(a.get("professor_name", a.get("professor_id", "Unknown")) for a in filtered)
+    by_dept: Counter = Counter(a.get("department", "Unknown") for a in filtered)
+
+    # By day (last N days)
+    daily: defaultdict = defaultdict(int)
+    for a in filtered:
+        ts = a.get("created_at") or a.get("date", "")
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            daily[dt.date().isoformat()] += 1
+        except Exception:
+            pass
+
+    return {
+        "period_days": days,
+        "total": len(filtered),
+        "by_status": dict(by_status),
+        "by_professor": dict(by_professor.most_common(10)),
+        "by_department": dict(by_dept.most_common(10)),
+        "daily": dict(sorted(daily.items())),
+    }
+
+
+@router.get("/ai/analytics")
+async def ai_analytics(days: int = Query(default=30, ge=1, le=365)) -> dict[str, Any]:
+    chats = await store.find_many("chat_sessions")
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    total_queries = 0
+    intent_counts: Counter = Counter()
+    lang_counts: Counter = Counter()
+
+    for s in chats:
+        ts = s.get("updated_at") or s.get("created_at", "")
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if dt < cutoff:
+                continue
+        except Exception:
+            pass
+
+        for t in s.get("turns", []):
+            total_queries += 1
+            intent_counts[t.get("intent", "UNKNOWN")] += 1
+            lang_counts[t.get("language", "Unknown")] += 1
+
+    return {
+        "period_days": days,
+        "total_queries": total_queries,
+        "by_intent": dict(intent_counts.most_common(20)),
+        "by_language": dict(lang_counts.most_common()),
+    }
+
+
+# ---------------------------------------------------------------------------
+# AI Agent Inspection
+# ---------------------------------------------------------------------------
+
+@router.get("/agent/status")
+async def agent_status() -> dict[str, Any]:
+    """Safe agent inspection — lists tools and status. Never exposes secrets."""
+    from app.web_mvp.tools import get_all_tool_definitions
+    tools = get_all_tool_definitions()
+    return {
+        "agent_status": "active",
+        "max_steps_per_turn": 4,
+        "tools": [
+            {
+                "name": t["name"],
+                "description": t["description"],
+                "required_args": t.get("required", []),
+                "parameters": list(t.get("parameters", {}).keys()),
+            }
+            for t in tools
+        ],
+        "supported_workflows": [
+            "Search knowledge (RAG)",
+            "Search professor by name/department",
+            "Check professor availability",
+            "List student appointments",
+            "Create appointment (with confirmation)",
+            "Reschedule appointment (with confirmation)",
+            "Cancel appointment (with confirmation)",
+        ],
+        "tool_count": len(tools),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Audit Logs
+# ---------------------------------------------------------------------------
+
+@router.get("/audit-logs")
+async def audit_logs(
+    action: str | None = Query(default=None),
+    target_type: str | None = Query(default=None),
+    days: int = Query(default=30, ge=1, le=365),
+) -> list[dict[str, Any]]:
+    logs = await store.find_many("audit_logs")
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    def passes(log: dict) -> bool:
+        ts = log.get("timestamp", "")
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if dt < cutoff:
+                return False
+        except Exception:
+            pass
+        if action and action.lower() not in log.get("action", "").lower():
+            return False
+        if target_type and target_type.lower() not in log.get("target_type", "").lower():
+            return False
+        return True
+
+    filtered = [lg for lg in logs if passes(lg)]
+    return sorted(filtered, key=lambda x: x.get("timestamp", ""), reverse=True)

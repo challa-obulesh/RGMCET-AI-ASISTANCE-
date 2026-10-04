@@ -10,6 +10,7 @@ class UserRegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
     role: Literal["student", "professor", "admin"] = "student"
+    department: str | None = None
 
 
 class UserLoginRequest(BaseModel):
@@ -23,6 +24,7 @@ class TokenResponse(BaseModel):
     user_id: str
     role: str
     name: str
+    approval_status: str | None = None
 
 
 class UserProfile(BaseModel):
@@ -30,4 +32,6 @@ class UserProfile(BaseModel):
     name: str
     email: str
     role: str
+    department: str | None = None
     professor_id: str | None = None
+    approval_status: str | None = None

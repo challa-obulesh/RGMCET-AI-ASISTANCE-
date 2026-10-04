@@ -48,6 +48,9 @@ export const api = {
 
   // Utils
   get: (path) => request(path),
+  post: (path, body) => request(path, { method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined }),
+  patch: (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (path) => request(path, { method: 'DELETE' }),
   updateSchedule: (id, slots) => request(`/professors/${encodeURIComponent(id)}/schedule`, { method: 'PUT', body: JSON.stringify({ slots }) }),
 }
 

@@ -171,9 +171,25 @@ async def require_student(
 async def require_professor(
     payload: dict[str, Any] = Depends(_get_current_user_payload),
 ) -> dict[str, Any]:
-    """Allow professors and admins."""
-    if payload.get("role") not in {"professor", "admin"}:
+    """Allow approved professors and admins."""
+    role = payload.get("role")
+    if role not in {"professor", "admin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Professor access required")
+    if role == "professor":
+        from app.web_mvp import store
+        user = await store.find_one("users", {"user_id": payload.get("sub")})
+        if user:
+            approval = user.get("approval_status", "APPROVED")
+            if approval != "APPROVED":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Professor account is {approval.lower()}. Access denied.",
+                )
+        elif payload.get("approval_status") and payload.get("approval_status") != "APPROVED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Professor account is not approved. Access denied.",
+            )
     return payload
 
 

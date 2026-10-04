@@ -12,22 +12,29 @@ function StatusPill({ status }) {
   return <span className={`status-pill ${cls}`}>{status.replaceAll('_', ' ')}</span>
 }
 
-function PendingCard({ item, onDecide, isBusy }) {
+function PendingCard({ item, onDecide, isBusy, professorName }) {
   return (
     <article className={`dash-request-card ${isBusy ? 'row-busy' : ''}`} id={`request-${item.appointment_id}`}>
       <div className="request-student">
         <div className="request-avatar"><GraduationCap size={18} /></div>
         <div>
-          <strong className="request-name">{item.student_name || 'Student'}</strong>
-          <span className="request-id">{item.student_id}</span>
+          <strong className="request-name"><span style={{ fontWeight: 500, color: '#666' }}>Student:</span> {item.student_name || 'Student'}</strong>
+          <span className="request-id">ID: {item.student_id}</span>
         </div>
       </div>
       <div className="request-details">
-        <div className="request-when">
-          <strong>{formatDate(item.date)}</strong>
-          <span>{item.start_time} – {item.end_time}</span>
+        <div style={{ fontSize: 13, marginBottom: 4, color: '#444' }}>
+          <strong>Professor:</strong> {item.professor_name || professorName || 'Professor'}
         </div>
-        <p className="request-reason">{item.reason}</p>
+        <div className="request-when">
+          <strong>Date:</strong> {formatDate(item.date)} | <strong>Time:</strong> {item.start_time} – {item.end_time}
+        </div>
+        <p className="request-reason"><strong>Purpose:</strong> {item.reason}</p>
+        <div style={{ marginTop: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#92400e', background: '#fef3c7', padding: '2px 8px', borderRadius: 4 }}>
+            Status: PENDING
+          </span>
+        </div>
       </div>
       <div className="request-actions">
         <button
@@ -160,10 +167,10 @@ export default function ProfessorDashboard() {
       ) : (
         <>
           {/* Pending requests */}
-          <section className="appointment-section">
+          <section className="appointment-section" id="pending-requests">
             <div className="section-title">
               <Clock3 size={18} />
-              <h2>Pending requests</h2>
+              <h2>Pending Appointment Requests</h2>
               <span>{pending.length}</span>
             </div>
             {pending.length === 0 ? (
@@ -176,6 +183,7 @@ export default function ProfessorDashboard() {
                     item={item}
                     onDecide={decide}
                     isBusy={busyId === item.appointment_id}
+                    professorName={user?.name}
                   />
                 ))}
               </div>

@@ -54,7 +54,9 @@ function AppShell() {
   useEffect(() => {
     if (loading) return
     if (user && (page === 'login' || page === 'register')) {
-      setPage(user.role === 'professor' ? 'professor' : 'chat')
+      if (user.role === 'professor') setPage('professor')
+      else if (user.role === 'admin') setPage('admin')
+      else setPage('chat')
     }
     if (!user && PROTECTED_PAGES.has(page)) {
       setPage('login')
@@ -126,7 +128,7 @@ function AppShell() {
           {page === 'appointments' && <Appointments />}
           {page === 'student' && (user ? <StudentDashboard /> : null)}
           {page === 'professor' && (user?.role === 'professor' ? <ProfessorDashboard /> : null)}
-          {page === 'admin' && (user?.role === 'admin' ? <AdminDashboard /> : null)}
+          {page === 'admin' && (user?.role === 'admin' ? <AdminDashboard /> : <div id="admin-access-denied" style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}><h2>Access Denied</h2><p>Administrator privileges are required to access this dashboard.</p></div>)}
         </main>
       </div>
     </div>
