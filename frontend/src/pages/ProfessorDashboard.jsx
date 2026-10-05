@@ -260,15 +260,16 @@ export default function ProfessorDashboard() {
               PROFESSOR PORTAL · VERIFIED FACULTY
             </p>
             <h1 style={{ margin: '2px 0 6px', fontSize: '24px', fontWeight: 800, color: '#163d31' }}>
-              Professor Dashboard
+              {displayName} — Professor Dashboard
             </h1>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#2d4a3e', marginBottom: '6px' }}>
-              Welcome, {displayName}
+            <div style={{ fontSize: '15px', fontWeight: 600, color: '#1b4332', marginBottom: '8px' }}>
+              Welcome, {displayName} — This is your faculty dashboard.
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '13px', color: '#555', alignItems: 'center' }}>
               <span><strong>Department:</strong> {displayDept}</span>
               <span><strong>Designation:</strong> {displayDesig}</span>
               <span><strong>Professor ID:</strong> <code style={{ background: '#e2ebd8', padding: '2px 6px', borderRadius: '4px', fontSize: '12px', color: '#163d31' }}>{displayId}</code></span>
+              <span><strong>Email:</strong> {profInfo.email || user?.email || 'Unavailable on official registry'}</span>
               <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '11px' }}>
                 Status: {displayStatus}
               </span>

@@ -333,11 +333,8 @@ async def get_professor_dashboard(
     token: dict[str, Any] = Depends(require_professor),
 ):
     """Return personalized dashboard data for the authenticated professor."""
-    professor_id = token.get("professor_id")
-    if not professor_id:
-        user = await store.find_one("users", {"user_id": token.get("sub")})
-        if user and user.get("professor_id"):
-            professor_id = user["professor_id"]
+    user = await store.find_one("users", {"user_id": token.get("sub")})
+    professor_id = token.get("professor_id") or (user.get("professor_id") if user else None)
     if not professor_id:
         raise HTTPException(
             status_code=400,
@@ -374,7 +371,7 @@ async def get_professor_dashboard(
             "department": prof_profile.get("department", token.get("department", "General")),
             "designation": prof_profile.get("designation", "Faculty"),
             "email": token.get("email") or prof_profile.get("email", ""),
-            "approval_status": token.get("approval_status", "APPROVED"),
+            "approval_status": (user.get("approval_status") if user else token.get("approval_status", "APPROVED")),
             "office": prof_profile.get("office", f"{prof_profile.get('department', 'General')} Department"),
         },
         "stats": {
