@@ -233,39 +233,78 @@ def clear_session_context(session_id: str, student_id: str) -> None:
 
 
 def _all_verified_faculty() -> list[dict]:
-    faculty_dir = DATA_DIR / "faculty"
+    reg_file = Path(__file__).resolve().parents[2] / "official_faculty_registry.json"
     faculty_list = []
-    if faculty_dir.exists():
-        for file_path in faculty_dir.glob("*.json"):
-            try:
-                records = json.loads(file_path.read_text(encoding="utf-8"))
-                for idx, record in enumerate(records):
-                    record_name = record.get("name", "")
-                    prof_id = f"PROF-VERIFIED-{file_path.stem.upper()}-{idx+1:03d}"
-                    faculty_list.append({
-                        "professor_id": prof_id,
-                        "name": record_name,
-                        "aliases": record.get("aliases", [record_name]),
-                        "department": record.get("department", "CSE Data Science"),
-                        "designation": record.get("designation", "Faculty"),
-                        "office": f"{record.get('department', 'CSE Data Science')} Department, RGMCET",
-                        "room": "Department Office",
-                        "active": True,
-                        "is_demo": False,
-                        "is_hod": record.get("is_hod", False),
-                    })
-            except Exception as exc:
-                logger.warning("Could not read faculty file %s: %s", file_path, exc)
+    if reg_file.exists():
+        try:
+            records = json.loads(reg_file.read_text(encoding="utf-8"))
+            for idx, r in enumerate(records):
+                name = r.get("name", "")
+                if "Bhaskara Rao" in name:
+                    prof_id = "PROF-VERIFIED-CSEDS-002"
+                elif "Penchala Prasad" in name:
+                    prof_id = "PROF-VERIFIED-CSEDS-001"
+                else:
+                    prof_id = f"PROF-VERIFIED-CSEDS-{idx+1:03d}"
+                faculty_list.append({
+                    "professor_id": prof_id,
+                    "name": name,
+                    "aliases": [name],
+                    "department": r.get("department", "CSE (Data Science)"),
+                    "designation": r.get("designation", "Faculty"),
+                    "official_email": r.get("official_email"),
+                    "email": r.get("official_email"),
+                    "source_url": r.get("source_url", "https://www.rgmcet.edu.in/cseds_faculty1.php"),
+                    "official_source_verified": r.get("official_source_verified", True),
+                    "office": "CSE (Data Science) Department, RGMCET",
+                    "room": "Faculty Cabin",
+                    "active": True,
+                    "is_demo": False,
+                    "is_hod": "HOD" in r.get("designation", "").upper(),
+                })
+        except Exception as exc:
+            logger.warning("Could not read official_faculty_registry.json: %s", exc)
+
+    if not faculty_list:
+        faculty_dir = DATA_DIR / "faculty"
+        if faculty_dir.exists():
+            for file_path in faculty_dir.glob("*.json"):
+                try:
+                    records = json.loads(file_path.read_text(encoding="utf-8"))
+                    for idx, record in enumerate(records):
+                        record_name = record.get("name", "")
+                        prof_id = f"PROF-VERIFIED-{file_path.stem.upper()}-{idx+1:03d}"
+                        faculty_list.append({
+                            "professor_id": prof_id,
+                            "name": record_name,
+                            "aliases": record.get("aliases", [record_name]),
+                            "department": record.get("department", "CSE Data Science"),
+                            "designation": record.get("designation", "Faculty"),
+                            "office": f"{record.get('department', 'CSE Data Science')} Department, RGMCET",
+                            "room": "Department Office",
+                            "active": True,
+                            "is_demo": False,
+                            "is_hod": record.get("is_hod", False),
+                        })
+                except Exception as exc:
+                    logger.warning("Could not read faculty file %s: %s", file_path, exc)
     return faculty_list
 
 
 async def list_professors(query: str | None = None) -> list[dict]:
     professors = await store.find_many("professors", {"active": True})
     verified = _all_verified_faculty()
-    existing_ids = {p.get("professor_id") for p in professors}
+    existing_ids = {p.get("professor_id"): p for p in professors}
     for v in verified:
-        if v["professor_id"] not in existing_ids:
+        p_id = v["professor_id"]
+        if p_id in existing_ids:
+            # enrich official fields if missing
+            for field in ("official_email", "source_url", "official_source_verified"):
+                if not existing_ids[p_id].get(field):
+                    existing_ids[p_id][field] = v.get(field)
+        else:
             professors.append(v)
+            existing_ids[p_id] = v
     if query:
         token = query.casefold()
         professors = [
@@ -280,13 +319,13 @@ async def list_professors(query: str | None = None) -> list[dict]:
 
 
 async def get_professor(professor_id: str) -> dict:
-    professor = await store.find_one("professors", {"professor_id": professor_id, "active": True})
-    if not professor:
-        for v in _all_verified_faculty():
-            if v["professor_id"] == professor_id:
-                return v
-        raise HTTPException(status_code=404, detail="Professor not found")
-    return professor
+    professor = await store.find_one("professors", {"professor_id": professor_id})
+    if professor and professor.get("active", True) is not False:
+        return professor
+    for v in _all_verified_faculty():
+        if v["professor_id"] == professor_id:
+            return v
+    raise HTTPException(status_code=404, detail="Professor not found")
 
 
 async def find_professor(name: str | None) -> dict | None:
@@ -343,12 +382,17 @@ async def update_professor_schedule(professor_id: str, slots: list[dict]) -> lis
     
     new_schedules = []
     for slot in slots:
+        status_val = slot.get("status")
+        if not status_val:
+            status_val = "AVAILABLE" if slot.get("is_available", True) else "BUSY"
+        is_avail = slot.get("is_available", True if status_val == "AVAILABLE" else False)
         new_slot = {
             "professor_id": professor_id,
             "day": slot["day"],
             "start_time": slot["start_time"],
             "end_time": slot["end_time"],
-            "status": slot["status"]
+            "status": status_val,
+            "is_available": is_avail,
         }
         await store.insert_one("professor_schedules", new_slot)
         new_schedules.append(new_slot)
@@ -418,8 +462,10 @@ async def create_appointment(request: AppointmentRequest) -> dict:
         "appointment_id": f"APT-{uuid4().hex[:10].upper()}",
         "student_id": request.student_id,
         "student_name": request.student_name,
+        "student_email": request.student_email,
         "professor_id": request.professor_id,
-        "professor_name": professor["name"],
+        "professor_name": professor.get("name", request.professor_name or "Professor"),
+        "department": professor.get("department", "General"),
         "date": selected_date.isoformat(),
         "start_time": start.strftime("%H:%M"),
         "end_time": end.strftime("%H:%M"),
@@ -433,7 +479,7 @@ async def create_appointment(request: AppointmentRequest) -> dict:
     return appointment
 
 
-async def change_appointment_status(appointment_id: str, status: str) -> dict:
+async def change_appointment_status(appointment_id: str, status: str, extra_fields: dict | None = None) -> dict:
     appointment = await store.find_one("appointments", {"appointment_id": appointment_id})
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
@@ -452,6 +498,8 @@ async def change_appointment_status(appointment_id: str, status: str) -> dict:
     fields = {"status": status, "slot_reserved": status in {"PENDING_APPROVAL", "APPROVED"}}
     if calendar_event_id:
         fields["calendar_event_id"] = calendar_event_id
+    if extra_fields:
+        fields.update(extra_fields)
 
     updated = await store.transition_appointment(
         appointment_id,
@@ -462,6 +510,7 @@ async def change_appointment_status(appointment_id: str, status: str) -> dict:
         raise HTTPException(status_code=409, detail="Appointment was changed by another request")
     logger.info("Appointment %s changed to %s", appointment_id, status)
     return updated
+
 
 
 async def reschedule_appointment(appointment_id: str, new_date: str, new_start_time: str) -> dict:

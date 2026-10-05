@@ -1,6 +1,6 @@
 from datetime import date
-
-from fastapi import APIRouter, HTTPException, Query, Depends
+from typing import Any
+from fastapi import APIRouter, HTTPException, Query, Depends, Body
 
 from app.web_mvp.auth import get_current_user
 from app.web_mvp.services import get_availability, get_professor, get_schedule, list_professors
@@ -36,15 +36,31 @@ async def professor_availability(professor_id: str, on_date: date = Query(alias=
 @router.put("/{professor_id}/schedule")
 async def update_schedule(
     professor_id: str,
-    request: dict,
+    request: Any = Body(...),
     token: dict = Depends(get_current_user)
 ):
-    if token.get("role") != "professor" or token.get("professor_id") != professor_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this schedule")
+    if token.get("role") != "admin":
+        prof_id = token.get("professor_id")
+        if not prof_id:
+            from app.web_mvp import store
+            user = await store.find_one("users", {"user_id": token.get("sub")})
+            if user and user.get("professor_id"):
+                prof_id = user["professor_id"]
+        if token.get("role") != "professor" or prof_id != professor_id:
+            raise HTTPException(status_code=403, detail="Not authorized to update another professor's schedule")
+
     from app.web_mvp.schemas import ScheduleUpdateRequest
     # validate using Pydantic
     try:
-        validated = ScheduleUpdateRequest(**request)
+        if isinstance(request, list):
+            validated = ScheduleUpdateRequest(slots=request)
+        elif isinstance(request, dict) and "slots" in request:
+            validated = ScheduleUpdateRequest(**request)
+        elif isinstance(request, dict):
+            # Dict with slot fields or other format
+            validated = ScheduleUpdateRequest(slots=[request])
+        else:
+            raise ValueError("Invalid schedule format")
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     
@@ -58,4 +74,5 @@ async def update_schedule(
             raise HTTPException(status_code=422, detail="End time must be after start time")
 
     from app.web_mvp.services import update_professor_schedule
-    return await update_professor_schedule(professor_id, slots)
+    updated = await update_professor_schedule(professor_id, slots)
+    return {"professor_id": professor_id, "schedule": updated, "slots": updated}

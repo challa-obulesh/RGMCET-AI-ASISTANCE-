@@ -517,6 +517,7 @@ async def get_users(role: str | None = Query(default=None)) -> list[dict[str, An
 
 
 @router.patch("/users/{user_id}/status")
+@router.patch("/professors/{user_id}/status")
 async def update_user_status(
     user_id: str,
     req: UserStatusUpdateRequest,
@@ -531,49 +532,111 @@ async def update_user_status(
 
     old_status = user.get("approval_status", "APPROVED")
     await store.update_one("users", {"user_id": user_id}, {"approval_status": new_status})
+    if user.get("professor_id"):
+        await store.update_one("professors", {"professor_id": user["professor_id"]}, {
+            "approval_status": new_status,
+            "application_approval_status": new_status,
+            "active": new_status == "APPROVED",
+        })
     action = f"{new_status}_USER" if user.get("role") != "professor" else f"{new_status}_PROFESSOR"
     await _audit(payload, action, "user", user_id, f"old_status={old_status} new_status={new_status} reason={req.reason or ''}")
-    return {"success": True, "user_id": user_id, "status": new_status}
+    return {"success": True, "user_id": user_id, "status": new_status, "approval_status": new_status}
 
 
 @router.post("/users/{user_id}/approve")
+@router.post("/professors/{user_id}/approve")
 async def approve_user(user_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
     user = await store.find_one("users", {"user_id": user_id})
     if not user:
         raise HTTPException(404, "User not found")
     await store.update_one("users", {"user_id": user_id}, {"approval_status": "APPROVED"})
+    if user.get("professor_id"):
+        await store.update_one("professors", {"professor_id": user["professor_id"]}, {
+            "approval_status": "APPROVED",
+            "application_approval_status": "APPROVED",
+            "active": True,
+        })
     await _audit(payload, "APPROVE_PROFESSOR", "user", user_id, "status=APPROVED")
-    return {"success": True, "user_id": user_id, "status": "APPROVED"}
+    return {"success": True, "user_id": user_id, "status": "APPROVED", "approval_status": "APPROVED"}
 
 
 @router.post("/users/{user_id}/reject")
+@router.post("/professors/{user_id}/reject")
 async def reject_user(user_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
     user = await store.find_one("users", {"user_id": user_id})
     if not user:
         raise HTTPException(404, "User not found")
     await store.update_one("users", {"user_id": user_id}, {"approval_status": "REJECTED"})
+    if user.get("professor_id"):
+        await store.update_one("professors", {"professor_id": user["professor_id"]}, {
+            "approval_status": "REJECTED",
+            "application_approval_status": "REJECTED",
+            "active": False,
+        })
     await _audit(payload, "REJECT_PROFESSOR", "user", user_id, "status=REJECTED")
-    return {"success": True, "user_id": user_id, "status": "REJECTED"}
+    return {"success": True, "user_id": user_id, "status": "REJECTED", "approval_status": "REJECTED"}
 
 
 @router.post("/users/{user_id}/suspend")
+@router.post("/professors/{user_id}/suspend")
 async def suspend_user(user_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
     user = await store.find_one("users", {"user_id": user_id})
     if not user:
         raise HTTPException(404, "User not found")
     await store.update_one("users", {"user_id": user_id}, {"approval_status": "SUSPENDED"})
+    if user.get("professor_id"):
+        await store.update_one("professors", {"professor_id": user["professor_id"]}, {
+            "approval_status": "SUSPENDED",
+            "application_approval_status": "SUSPENDED",
+            "active": False,
+        })
     await _audit(payload, "SUSPEND_PROFESSOR", "user", user_id, "status=SUSPENDED")
-    return {"success": True, "user_id": user_id, "status": "SUSPENDED"}
+    return {"success": True, "user_id": user_id, "status": "SUSPENDED", "approval_status": "SUSPENDED"}
 
 
 @router.post("/users/{user_id}/reactivate")
+@router.post("/professors/{user_id}/reactivate")
 async def reactivate_user(user_id: str, payload: dict = Depends(require_admin)) -> dict[str, Any]:
     user = await store.find_one("users", {"user_id": user_id})
     if not user:
         raise HTTPException(404, "User not found")
     await store.update_one("users", {"user_id": user_id}, {"approval_status": "APPROVED"})
+    if user.get("professor_id"):
+        await store.update_one("professors", {"professor_id": user["professor_id"]}, {
+            "approval_status": "APPROVED",
+            "application_approval_status": "APPROVED",
+            "active": True,
+        })
     await _audit(payload, "REACTIVATE_PROFESSOR", "user", user_id, "status=APPROVED")
-    return {"success": True, "user_id": user_id, "status": "APPROVED"}
+    return {"success": True, "user_id": user_id, "status": "APPROVED", "approval_status": "APPROVED"}
+
+
+@router.get("/professors/approvals")
+async def get_professor_approvals() -> list[dict[str, Any]]:
+    """Return all professor user accounts and official registry linkage for admin approval."""
+    users = await store.find_many("users", {"role": "professor"})
+    profs = await store.find_many("professors")
+    prof_by_id = {p.get("professor_id"): p for p in profs}
+
+    result = []
+    for u in users:
+        p_id = u.get("professor_id")
+        p_info = prof_by_id.get(p_id, {})
+        result.append({
+            "user_id": u.get("user_id"),
+            "email": u.get("email"),
+            "name": u.get("name") or p_info.get("name"),
+            "professor_id": p_id,
+            "department": p_info.get("department") or u.get("department") or "CSE (Data Science)",
+            "designation": p_info.get("designation") or "Assistant Professor",
+            "official_email": p_info.get("official_email") or u.get("email"),
+            "official_source_verified": p_info.get("official_source_verified", True),
+            "source_url": p_info.get("source_url", "https://www.rgmcet.edu.in/cseds_faculty1.php"),
+            "approval_status": u.get("approval_status", "PENDING"),
+            "application_approval_status": u.get("approval_status", "PENDING"),
+            "registered_at": u.get("created_at"),
+        })
+    return result
 
 
 # ---------------------------------------------------------------------------

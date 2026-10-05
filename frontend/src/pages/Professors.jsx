@@ -10,7 +10,7 @@ function AppointmentModal({ professor, onClose, studentId, studentName }) {
   const [slots, setSlots] = useState([])
   const [time, setTime] = useState('')
   const [reason, setReason] = useState('')
-  const [message, setMessage] = useState('')
+  const [submittedData, setSubmittedData] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -25,17 +25,23 @@ function AppointmentModal({ professor, onClose, studentId, studentName }) {
     event.preventDefault()
     setBusy(true)
     setError('')
-    setMessage('')
     try {
-      await api.createAppointment({
+      const res = await api.createAppointment({
         professor_id: professor.professor_id,
+        professor_name: professor.name,
         date,
         start_time: time,
         reason,
         student_id: studentId,
         student_name: studentName,
       })
-      setMessage('Request submitted. It is pending professor approval, not yet confirmed.')
+      setSubmittedData({
+        professorName: professor.name,
+        department: professor.department,
+        date,
+        time,
+        status: res.status || 'PENDING_APPROVAL',
+      })
     } catch (exception) {
       setError(exception.message)
     } finally {
@@ -45,42 +51,70 @@ function AppointmentModal({ professor, onClose, studentId, studentName }) {
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section className="appointment-modal" role="dialog" aria-modal="true" aria-labelledby="request-title">
+      <section className="appointment-modal appointment-dialog" role="dialog" aria-modal="true" aria-labelledby="request-title" style={{ maxWidth: '480px', width: '100%' }}>
         <div className="modal-heading">
           <div>
-            <p className="eyebrow">PROFESSOR REQUEST</p>
-            <h2 id="request-title">Meet {professor.name}</h2>
+            <p className="eyebrow">CONSULTATION REQUEST</p>
+            <h2 id="request-title">Request Appointment</h2>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Close"><X size={19} /></button>
         </div>
-        <form onSubmit={submit} className="request-form">
-          <label>
-            Date
-            <input required type="date" min={tomorrow} value={date} onChange={(event) => setDate(event.target.value)} />
-          </label>
-          <label>
-            Available 30-minute slot
-            <select required value={time} onChange={(event) => setTime(event.target.value)} disabled={!slots.length}>
-              <option value="">{slots.length ? 'Choose a slot' : 'No available slots'}</option>
-              {slots.map((slot) => (
-                <option key={slot.start_time} value={slot.start_time}>{slot.start_time}–{slot.end_time}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Reason
-            <textarea required minLength="2" maxLength="500" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="What would you like to discuss?" />
-          </label>
-          {error && <p className="form-error">{error}</p>}
-          {message && <p className="form-success">{message}</p>}
-          <button className="primary-action" disabled={busy || !slots.length || !!message}>
-            <CalendarDays size={16} /> {busy ? 'Submitting…' : 'Submit request'}
-          </button>
-        </form>
+
+        {submittedData ? (
+          <div className="appointment-success-box" style={{ padding: '20px 0', textAlign: 'center' }}>
+            <div style={{ background: '#dcfce7', color: '#166534', width: 48, height: 48, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+              <CalendarDays size={24} />
+            </div>
+            <h3 style={{ fontSize: 18, marginBottom: 8, color: '#163d31' }}>
+              Appointment request sent to {submittedData.professorName}.
+            </h3>
+            <div style={{ display: 'inline-block', margin: '8px 0 16px', background: '#fef3c7', color: '#92400e', padding: '6px 14px', borderRadius: 20, fontWeight: 700, fontSize: 13, letterSpacing: '0.03em' }}>
+              Status: PENDING PROFESSOR APPROVAL
+            </div>
+            <p style={{ fontSize: 13, color: '#555', lineHeight: 1.5, marginBottom: 20 }}>
+              Your request is now waiting in <strong>{submittedData.professorName}</strong>'s queue for review. You can monitor the approval status anytime from your <strong>Appointments</strong> dashboard.
+            </p>
+            <button className="primary-action" onClick={onClose} style={{ width: '100%' }}>
+              Done
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="request-form">
+            <div style={{ background: '#f8faf6', padding: '12px 14px', borderRadius: 8, marginBottom: 14, border: '1px solid #e2ebd8' }}>
+              <div style={{ fontSize: 13, color: '#666' }}>Professor:</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#163d31' }}>{professor.name}</div>
+              <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>Department:</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: '#333' }}>{professor.department || 'General'}</div>
+            </div>
+
+            <label>
+              Date:
+              <input id="appointment-date-input" required type="date" min={tomorrow} value={date} onChange={(event) => setDate(event.target.value)} />
+            </label>
+            <label>
+              Time:
+              <select id="appointment-time-select" required value={time} onChange={(event) => setTime(event.target.value)} disabled={!slots.length}>
+                <option value="">{slots.length ? 'Select a 30-minute slot' : 'No available slots on this day'}</option>
+                {slots.map((slot) => (
+                  <option key={slot.start_time} value={slot.start_time}>{slot.start_time} – {slot.end_time}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Purpose:
+              <textarea id="appointment-reason-input" required minLength="2" maxLength="500" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Student purpose (e.g. Project discussion, doubts, lab review)" />
+            </label>
+            {error && <p className="form-error">{error}</p>}
+            <button id="appointment-submit-button" className="primary-action" disabled={busy || !slots.length} style={{ width: '100%', marginTop: 8 }}>
+              <CalendarDays size={16} /> {busy ? 'Sending request…' : 'Request Appointment'}
+            </button>
+          </form>
+        )}
       </section>
     </div>
   )
 }
+
 
 export default function Professors() {
   const { user } = useAuth()

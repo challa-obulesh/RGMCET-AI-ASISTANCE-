@@ -32,12 +32,19 @@ export function AuthProvider({ children }) {
     return profile
   }, [])
 
-  const register = useCallback(async (name, email, password, role = 'student') => {
-    const data = await api.register({ name, email, password, role })
-    localStorage.setItem('rgmcet-token', data.access_token)
-    const profile = await api.me()
-    setUser(profile)
-    return profile
+  const register = useCallback(async (name, email, password, role = 'student', professor_id = null) => {
+    const data = await api.register({ name, email, password, role, professor_id })
+    if (data.approval_status === 'APPROVED') {
+      localStorage.setItem('rgmcet-token', data.access_token)
+      try {
+        const profile = await api.me()
+        setUser(profile)
+        return profile
+      } catch {
+        return data
+      }
+    }
+    return data
   }, [])
 
   const logout = useCallback(() => {

@@ -38,10 +38,19 @@ class AppointmentRequest(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
     student_id: str = "demo-student"
     student_name: str = "Demo Student"
+    student_email: str | None = None
+    professor_name: str | None = None
+    end_time: str | None = None
+
+
+class AppointmentDecisionRequest(BaseModel):
+    reason: str | None = None
 
 
 class AppointmentStatusUpdate(BaseModel):
     status: Literal["APPROVED", "REJECTED", "CANCELLED"]
+    reason: str | None = None
+
 
 
 class RescheduleRequest(BaseModel):

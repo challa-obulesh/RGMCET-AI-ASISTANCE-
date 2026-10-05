@@ -12,40 +12,61 @@ function StatusPill({ status }) {
   return <span className={`status-pill ${cls}`}>{status.replaceAll('_', ' ')}</span>
 }
 
-function AppointmentCard({ item, onCancel, onDecide, isBusy, showActions }) {
+function AppointmentCard({ item, onCancel, isBusy }) {
   const canCancel = ['PENDING_APPROVAL', 'APPROVED'].includes(item.status)
   return (
-    <article className={`appointment-row ${isBusy ? 'row-busy' : ''}`}>
-      <div className="appointment-date">
-        <strong>{formatDate(item.date)}</strong>
-        <span>{item.start_time}–{item.end_time}</span>
-      </div>
-      <div className="appointment-person">
-        <strong>{item.professor_name || item.student_name}</strong>
-        <span title={item.reason}>{item.reason?.slice(0, 60)}{item.reason?.length > 60 ? '…' : ''}</span>
-      </div>
-      <StatusPill status={item.status} />
-      {item.calendar_event_id && (
-        <span className="calendar-sync-status" title="Synced to Google Calendar">
-          <CalendarDays size={14} style={{ marginRight: '4px', verticalAlign: 'middle', color: '#4CAF50' }} />
-          <small style={{ color: '#4CAF50' }}>Synced</small>
-        </span>
-      )}
-      <div className="row-actions">
-        {showActions && item.status === 'PENDING_APPROVAL' && (
-          <>
-            <button id={`approve-${item.appointment_id}`} className="approve-button" onClick={() => onDecide(item.appointment_id, 'approve')} aria-label="Approve appointment" title="Approve">
-              <Check size={16} />
-            </button>
-            <button id={`reject-${item.appointment_id}`} className="reject-button" onClick={() => onDecide(item.appointment_id, 'reject')} aria-label="Reject appointment" title="Reject">
+    <article className={`appointment-row ${isBusy ? 'row-busy' : ''}`} style={{ display: 'block', padding: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
+        <div className="appointment-date">
+          <strong>{formatDate(item.date)}</strong>
+          <span>{item.start_time}–{item.end_time}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <StatusPill status={item.status} />
+          {item.calendar_event_id && (
+            <span className="calendar-sync-status" title="Synced to Google Calendar">
+              <CalendarDays size={14} style={{ marginRight: '4px', verticalAlign: 'middle', color: '#4CAF50' }} />
+              <small style={{ color: '#4CAF50' }}>Synced</small>
+            </span>
+          )}
+          {canCancel && onCancel && (
+            <button id={`cancel-${item.appointment_id}`} className="reject-button" onClick={() => onCancel(item.appointment_id)} aria-label="Cancel appointment" title="Cancel">
               <X size={16} />
             </button>
-          </>
+          )}
+        </div>
+      </div>
+
+      <div style={{ marginTop: '10px', fontSize: '0.9rem' }}>
+        <div><strong>Professor:</strong> {item.professor_name || 'Assigned Faculty'} {item.department ? `(${item.department})` : ''}</div>
+        <div style={{ marginTop: '4px', color: '#4b5563' }}><strong>Purpose:</strong> {item.reason}</div>
+      </div>
+
+      <div style={{ marginTop: '10px', padding: '8px 12px', borderRadius: '6px', fontSize: '0.85rem', background: '#f8fafc', borderLeft: '3px solid #cbd5e1' }}>
+        {item.status === 'PENDING_APPROVAL' && (
+          <span style={{ color: '#b45309' }}>
+            ⏳ <strong>PENDING PROFESSOR APPROVAL:</strong> Waiting for {item.professor_name || 'the professor'} to review your request.
+          </span>
         )}
-        {!showActions && canCancel && onCancel && (
-          <button id={`cancel-${item.appointment_id}`} className="reject-button" onClick={() => onCancel(item.appointment_id)} aria-label="Cancel appointment" title="Cancel">
-            <X size={16} />
-          </button>
+        {item.status === 'APPROVED' && (
+          <span style={{ color: '#15803d' }}>
+            ✓ <strong>Your appointment with {item.professor_name || 'the professor'} has been approved.</strong> Please be available at the scheduled time.
+          </span>
+        )}
+        {item.status === 'REJECTED' && (
+          <span style={{ color: '#b91c1c' }}>
+            ✕ <strong>Request Rejected.</strong> {item.rejection_reason ? `Reason: ${item.rejection_reason}` : 'No reason provided.'}
+          </span>
+        )}
+        {item.status === 'RESCHEDULED' && (
+          <span style={{ color: '#0369a1' }}>
+            🔄 <strong>Professor requested a new appointment time.</strong> Updated slot: {item.date} at {item.start_time}–{item.end_time}.
+          </span>
+        )}
+        {item.status === 'CANCELLED' && (
+          <span style={{ color: '#64748b' }}>
+            ⊘ Appointment has been cancelled.
+          </span>
         )}
       </div>
     </article>

@@ -62,6 +62,20 @@ async def init_store() -> None:
                 name="unique_active_professor_slot",
             )
             await _database.chat_sessions.create_index("session_id")
+
+            # Seed official faculty records into MongoDB if not present
+            try:
+                data_dir = Path(__file__).resolve().parents[2] / "data"
+                demo_profs = json.loads((data_dir / "demo_professors.json").read_text(encoding="utf-8"))
+                for p in demo_profs:
+                    await _database.professors.update_one(
+                        {"professor_id": p["professor_id"]},
+                        {"$setOnInsert": p},
+                        upsert=True,
+                    )
+            except Exception as e:
+                logger.warning("Could not seed official faculty into MongoDB: %s", e)
+
             logger.info("Web MVP connected to MongoDB database %s", DATABASE_NAME)
             return
         except Exception as exc:

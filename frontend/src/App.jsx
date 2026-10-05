@@ -23,6 +23,32 @@ const pageTitles = {
   register: 'Create account',
 }
 
+const pageToPath = {
+  chat: '/',
+  professors: '/professors',
+  appointments: '/appointments',
+  student: '/student/dashboard',
+  professor: '/professor/dashboard',
+  admin: '/admin/dashboard',
+  login: '/login',
+  register: '/register',
+}
+
+const pathToPage = {
+  '/': 'chat',
+  '/chat': 'chat',
+  '/professors': 'professors',
+  '/appointments': 'appointments',
+  '/student/dashboard': 'student',
+  '/student': 'student',
+  '/professor/dashboard': 'professor',
+  '/professor': 'professor',
+  '/admin/dashboard': 'admin',
+  '/admin': 'admin',
+  '/login': 'login',
+  '/register': 'register',
+}
+
 // Pages that don't show the sidebar / topbar (full-screen auth pages)
 const AUTH_PAGES = new Set(['login', 'register'])
 // Pages that require authentication
@@ -30,7 +56,10 @@ const PROTECTED_PAGES = new Set(['student', 'professor', 'admin'])
 
 function AppShell() {
   const { user, loading } = useAuth()
-  const [page, setPage] = useState('chat')
+  const [page, setPage] = useState(() => {
+    const initial = pathToPage[window.location.pathname]
+    return initial || 'chat'
+  })
   const [resetKey, setResetKey] = useState(0)
   const [activeConversationId, setActiveConversationId] = useState(null)
   const [recentChats, setRecentChats] = useState(() => {
@@ -39,27 +68,43 @@ function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [desktopCollapsed, setDesktopCollapsed] = useState(false)
 
-  function newChat() { setPage('chat'); setActiveConversationId(null); setResetKey((k) => k + 1); setSidebarOpen(false) }
+  function newChat() {
+    navigate('chat')
+    setActiveConversationId(null)
+    setResetKey((k) => k + 1)
+    setSidebarOpen(false)
+  }
 
   function navigate(next) {
-    // Guard protected pages — redirect to login
-    if (PROTECTED_PAGES.has(next) && !user) {
-      setPage('login')
-    } else {
-      setPage(next)
+    const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('rgmcet-token')
+    const target = (PROTECTED_PAGES.has(next) && !user && !hasToken) ? 'login' : next
+    setPage(target)
+    const newPath = pageToPath[target] || '/'
+    if (window.location.pathname !== newPath) {
+      window.history.pushState(null, '', newPath)
     }
     setSidebarOpen(false)
   }
 
   useEffect(() => {
-    if (loading) return
-    if (user && (page === 'login' || page === 'register')) {
-      if (user.role === 'professor') setPage('professor')
-      else if (user.role === 'admin') setPage('admin')
-      else setPage('chat')
+    const handlePopState = () => {
+      const p = pathToPage[window.location.pathname] || 'chat'
+      setPage(p)
     }
-    if (!user && PROTECTED_PAGES.has(page)) {
-      setPage('login')
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  useEffect(() => {
+    if (loading) return
+    const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('rgmcet-token')
+    if (user && (page === 'login' || page === 'register')) {
+      if (user.role === 'professor') navigate('professor')
+      else if (user.role === 'admin') navigate('admin')
+      else navigate('student')
+    }
+    if (!user && !hasToken && PROTECTED_PAGES.has(page)) {
+      navigate('login')
     }
 
     if (user && user.role === 'student') {
@@ -126,9 +171,9 @@ function AppShell() {
           {page === 'chat' && <Chat key={resetKey} resetKey={resetKey} activeConversationId={activeConversationId} onNewConversation={addRecent} />}
           {page === 'professors' && <Professors />}
           {page === 'appointments' && <Appointments />}
-          {page === 'student' && (user ? <StudentDashboard /> : null)}
-          {page === 'professor' && (user?.role === 'professor' ? <ProfessorDashboard /> : null)}
-          {page === 'admin' && (user?.role === 'admin' ? <AdminDashboard /> : <div id="admin-access-denied" style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}><h2>Access Denied</h2><p>Administrator privileges are required to access this dashboard.</p></div>)}
+          {page === 'student' && (user?.role === 'student' || user?.role === 'admin' ? <StudentDashboard /> : <div id="student-access-denied" className="access-denied" style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}><h2>Access Denied</h2><p>Student sign-in is required to access the Student Portal.</p></div>)}
+          {page === 'professor' && (user?.role === 'professor' ? <ProfessorDashboard /> : <div id="professor-access-denied" className="access-denied" style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}><h2>Access Denied</h2><p>Professor credentials and an approved account are required to view the Professor Dashboard.</p></div>)}
+          {page === 'admin' && (user?.role === 'admin' ? <AdminDashboard /> : <div id="admin-access-denied" className="access-denied" style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}><h2>Access Denied</h2><p>Administrator privileges are required to access this dashboard.</p></div>)}
         </main>
       </div>
     </div>

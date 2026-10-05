@@ -34,14 +34,35 @@ export const api = {
   myAppointments: () => request('/appointments'),
   pendingAppointments: () => request('/appointments?status=PENDING_APPROVAL'),
   professorAppointments: (status) => request(`/professor/appointments${status ? `?status=${status}` : ''}`),
-  decideAppointment: (id, decision) =>
-    request(`/appointments/${encodeURIComponent(id)}/${decision}`, { method: 'POST' }),
+  professorDashboard: () => request('/professor/dashboard'),
+  decideAppointment: (id, decision, body = {}) =>
+    request(`/appointments/${encodeURIComponent(id)}/${decision}`, {
+      method: 'POST',
+      body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
+    }),
+  rejectAppointment: (id, reason) =>
+    request(`/appointments/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  rescheduleAppointment: (id, date, start_time) =>
+    request(`/appointments/${encodeURIComponent(id)}/reschedule`, {
+      method: 'PATCH',
+      body: JSON.stringify({ date, start_time }),
+    }),
   getAppointment: (id) => request(`/appointments/${encodeURIComponent(id)}`),
 
   // Auth
   register: (body) => request('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body) => request('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   me: () => request('/auth/me'),
+
+  // Admin Professor Approvals
+  professorApprovals: () => request('/admin/professors/approvals'),
+  adminApproveUser: (id) => request(`/admin/professors/${encodeURIComponent(id)}/approve`, { method: 'POST' }),
+  adminRejectUser: (id) => request(`/admin/professors/${encodeURIComponent(id)}/reject`, { method: 'POST' }),
+  adminSuspendUser: (id) => request(`/admin/professors/${encodeURIComponent(id)}/suspend`, { method: 'POST' }),
+  adminReactivateUser: (id) => request(`/admin/professors/${encodeURIComponent(id)}/reactivate`, { method: 'POST' }),
 
   // Health
   health: () => request('/health'),

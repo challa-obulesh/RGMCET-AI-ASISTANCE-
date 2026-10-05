@@ -46,20 +46,19 @@ export default function Appointments() {
   const [error, setError] = useState('')
   const [busyId, setBusyId] = useState('')
 
+  const canDecide = user?.role === 'professor' || user?.role === 'admin'
+
   async function load() {
     try {
       if (user && user.role === 'student') {
-        // Authenticated student — GET /api/appointments uses JWT to filter by student
         const [own, queue] = await Promise.all([api.myAppointments(), api.pendingAppointments()])
         setMine(own)
         setPending(queue)
       } else if (user && user.role === 'professor') {
-        // Professor view — show all pending for them to review
         const queue = await api.pendingAppointments()
         setMine([])
         setPending(queue)
       } else {
-        // Demo / unauthenticated — fall back to all appointments list
         const [own, queue] = await Promise.all([api.myAppointments(), api.pendingAppointments()])
         setMine(own)
         setPending(queue)
@@ -119,7 +118,7 @@ export default function Appointments() {
           ? <div className="appointment-list">
               {pending.map((item) => (
                 <div className={busyId === item.appointment_id ? 'row-busy' : ''} key={item.appointment_id}>
-                  <AppointmentRow item={item} actions onDecision={decide} />
+                  <AppointmentRow item={item} actions={canDecide} onDecision={decide} />
                 </div>
               ))}
             </div>

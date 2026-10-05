@@ -16,10 +16,9 @@ export default function Login({ onNavigate }) {
     setBusy(true); setError('')
     try {
       const profile = await login(email.trim(), password)
-      // Navigate to the correct dashboard after login
       if (profile.role === 'professor') onNavigate('professor')
       else if (profile.role === 'admin') onNavigate('admin')
-      else onNavigate('chat')
+      else onNavigate('student')
     } catch (err) {
       setError(err.message || 'Login failed. Check your credentials.')
     } finally {

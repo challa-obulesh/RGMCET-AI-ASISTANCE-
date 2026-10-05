@@ -89,4 +89,14 @@ async def llm_status():
 
 dist_dir = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if dist_dir.exists():
-    app.mount("/", StaticFiles(directory=str(dist_dir), html=True), name="static")
+    from starlette.responses import FileResponse, Response
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        candidate = dist_dir / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        index_file = dist_dir / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        return Response(status_code=404)

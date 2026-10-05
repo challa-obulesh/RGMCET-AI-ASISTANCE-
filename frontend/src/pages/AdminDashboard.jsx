@@ -9,6 +9,7 @@ import {
 
 const TABS = [
   { id: 'overview',     label: 'Overview',      icon: Activity },
+  { id: 'approvals',    label: 'Professor Approvals', icon: Shield },
   { id: 'knowledge',    label: 'Knowledge',      icon: BookOpen },
   { id: 'rag',          label: 'RAG',            icon: Database },
   { id: 'faculty',      label: 'Faculty',        icon: Users },
@@ -450,6 +451,173 @@ function ListTab({ title, tabId, endpoint, cols }) {
         </div>
       </div>
       {loading ? <p>Loading…</p> : <Table cols={cols} rows={rows} />}
+    </div>
+  )
+}
+
+// ===== PROFESSOR APPROVALS TAB =====
+function ProfessorApprovalsTab() {
+  const [approvals, setApprovals] = useState([])
+  const [faculty, setFaculty] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [actionBusy, setActionBusy] = useState('')
+  const [msg, setMsg] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [apprData, facData] = await Promise.all([
+        api.professorApprovals().catch(() => []),
+        api.professors().catch(() => []),
+      ])
+      setApprovals(apprData || [])
+      setFaculty(facData || [])
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const handleDecision = async (userId, decision) => {
+    setActionBusy(userId)
+    setMsg('')
+    try {
+      if (decision === 'APPROVE') await api.adminApproveUser(userId)
+      else if (decision === 'REJECT') await api.adminRejectUser(userId)
+      else if (decision === 'SUSPEND') await api.adminSuspendUser(userId)
+      setMsg(`Professor account ${decision.toLowerCase()}d successfully.`)
+      await load()
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  const pendingList = approvals.filter(a => a.approval_status === 'PENDING')
+
+  return (
+    <div id="admin-professor-approvals">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ margin: '0 0 4px', fontSize: 20, color: '#163d31' }}>Professor Approvals & Faculty Verification</h2>
+          <p style={{ margin: 0, fontSize: 13, color: '#666' }}>
+            Review pending faculty registrations against official RGMCET records before granting professor access.
+          </p>
+        </div>
+        <Btn onClick={load} disabled={loading}><RefreshCw size={13} /> Refresh</Btn>
+      </div>
+
+      {msg && <div style={{ background: '#dcfce7', border: '1px solid #86efac', padding: '10px 14px', borderRadius: 8, color: '#166534', marginBottom: 16, fontSize: 13 }}>{msg}</div>}
+
+      {/* Pending Section */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <h3 style={{ margin: 0, fontSize: 16, color: '#92400e' }}>Pending Professor Accounts</h3>
+          <Badge text={`${pendingList.length} Awaiting Verification`} color="#92400e" bg="#fef3c7" />
+        </div>
+
+        {pendingList.length === 0 ? (
+          <div style={{ background: '#f8fafc', padding: 24, borderRadius: 10, border: '1px dashed #cbd5e1', textAlign: 'center', color: '#64748b' }}>
+            No professor accounts pending administrator approval.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
+            {pendingList.map(p => (
+              <div key={p.user_id} className="approval-card" style={{ background: 'white', borderRadius: 12, padding: 18, border: '2px solid #fef08a', boxShadow: '0 2px 8px rgba(0,0,0,.04)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: 16, color: '#163d31' }}>{p.name}</h4>
+                    <span style={{ fontSize: 12, color: '#666' }}>{p.designation} · {p.department}</span>
+                  </div>
+                  <Badge text="PENDING" color="#92400e" bg="#fef3c7" />
+                </div>
+
+                <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16, background: '#f9fafb', padding: 12, borderRadius: 8 }}>
+                  <div><strong>Official Email:</strong> <span>{p.official_email || 'Not publicly listed'}</span></div>
+                  <div><strong>Login Email:</strong> <span>{p.email}</span></div>
+                  <div><strong>Professor ID:</strong> <code>{p.professor_id}</code></div>
+                  <div>
+                    <strong>Source:</strong>{' '}
+                    <a href={p.source_url} target="_blank" rel="noreferrer" style={{ color: '#1a5f8a', textDecoration: 'underline' }}>
+                      Verified RGMCET Faculty Profile ↗
+                    </a>
+                  </div>
+                  <div><strong>Official Source Verified:</strong> <span style={{ color: '#166534', fontWeight: 600 }}>✓ Verified</span></div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    id={`approve-prof-${p.user_id}`}
+                    onClick={() => handleDecision(p.user_id, 'APPROVE')}
+                    disabled={actionBusy === p.user_id}
+                    style={{ flex: 1, background: '#166534', color: 'white', border: 'none', padding: '8px 14px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    id={`reject-prof-${p.user_id}`}
+                    onClick={() => handleDecision(p.user_id, 'REJECT')}
+                    disabled={actionBusy === p.user_id}
+                    style={{ flex: 1, background: '#991b1b', color: 'white', border: 'none', padding: '8px 14px', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Official CSE(DS) Faculty Registry Section */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 16, color: '#163d31' }}>Official RGMCET CSE (Data Science) Faculty Registry</h3>
+          <Badge text={`${faculty.length} Faculty`} color="#166534" bg="#dcfce7" />
+        </div>
+        <p style={{ margin: '0 0 14px', fontSize: 12, color: '#666' }}>
+          Authoritative faculty directory from <a href="https://www.rgmcet.edu.in/cseds_faculty1.php" target="_blank" rel="noreferrer" style={{ color: '#1a5f8a' }}>rgmcet.edu.in/cseds_faculty1.php</a>. Only officially verified emails are populated.
+        </p>
+
+        <Table
+          cols={[
+            { key: 'name', label: 'Faculty Name', render: r => <strong>{r.name}</strong> },
+            { key: 'designation', label: 'Designation' },
+            { key: 'department', label: 'Department' },
+            {
+              key: 'official_email',
+              label: 'Official Email',
+              render: r => r.official_email ? (
+                <code style={{ color: '#166534' }}>{r.official_email}</code>
+              ) : (
+                <span style={{ color: '#9ca3af', fontStyle: 'italic', fontSize: 12 }}>Not publicly listed (Admin config required)</span>
+              )
+            },
+            {
+              key: 'source_url',
+              label: 'Source',
+              render: r => r.source_url ? (
+                <a href={r.source_url} target="_blank" rel="noreferrer" style={{ color: '#1a5f8a', fontSize: 12 }}>
+                  Official Profile ↗
+                </a>
+              ) : '—'
+            },
+            {
+              key: 'status',
+              label: 'Portal Status',
+              render: r => {
+                const isApproved = r.approval_status === 'APPROVED' || r.active
+                return <Badge text={isApproved ? 'APPROVED' : 'PENDING'} color={isApproved ? '#166534' : '#92400e'} bg={isApproved ? '#dcfce7' : '#fef3c7'} />
+              }
+            }
+          ]}
+          rows={faculty}
+        />
+      </div>
     </div>
   )
 }
@@ -1107,6 +1275,7 @@ export default function AdminDashboard() {
       {errorOv && <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: 12, color: '#991b1b', marginBottom: 16 }}>{errorOv}</div>}
 
       {activeTab === 'overview'     && (loadingOv ? <p>Loading…</p> : <OverviewTab data={overview} />)}
+      {activeTab === 'approvals'    && <ProfessorApprovalsTab />}
       {activeTab === 'knowledge'    && <KnowledgeTab />}
       {activeTab === 'rag'          && <RAGTab />}
       {activeTab === 'faculty'      && <ListTab title="Faculty Management" tabId="faculty" endpoint="faculty" cols={facultyCols} />}

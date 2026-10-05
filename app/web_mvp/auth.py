@@ -178,19 +178,31 @@ async def require_professor(
     if role == "professor":
         from app.web_mvp import store
         user = await store.find_one("users", {"user_id": payload.get("sub")})
-        if user:
-            approval = user.get("approval_status", "APPROVED")
-            if approval != "APPROVED":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Professor account is {approval.lower()}. Access denied.",
-                )
-        elif payload.get("approval_status") and payload.get("approval_status") != "APPROVED":
+        approval = user.get("approval_status", "APPROVED") if user else payload.get("approval_status", "APPROVED")
+        if approval == "PENDING":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Professor account is not approved. Access denied.",
+                detail="Your professor account is pending admin approval. Please contact the administrator after approval.",
             )
+        elif approval == "REJECTED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your professor account has not been approved.",
+            )
+        elif approval == "SUSPENDED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your professor account is currently suspended. Please contact the administrator.",
+            )
+        elif approval != "APPROVED":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your professor account has not been approved.",
+            )
+        if user and user.get("professor_id") and not payload.get("professor_id"):
+            payload["professor_id"] = user["professor_id"]
     return payload
+
 
 
 async def require_any_role(
