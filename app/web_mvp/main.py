@@ -73,6 +73,20 @@ async def health():
     }
 
 
+@app.get("/api/llm-status")
+async def llm_status():
+    from app.web_mvp.llm import configured_provider
+    from app.web_mvp import config
+    provider = configured_provider() or "none"
+    model = config.GEMINI_MODEL if provider == "gemini" else (config.OPENAI_MODEL if provider == "openai" else "none")
+    return {
+        "status": "ok" if provider != "none" else "fallback",
+        "provider": provider,
+        "model": model,
+        "ready": provider != "none",
+    }
+
+
 dist_dir = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if dist_dir.exists():
     app.mount("/", StaticFiles(directory=str(dist_dir), html=True), name="static")
