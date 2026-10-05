@@ -10,7 +10,7 @@ services:
       - key: APP_ENV
         value: production
       - key: DEMO_MODE
-        value: "true"
+        value: "false"
       - key: DATABASE_NAME
         value: rgmcet_ai_assistant
       - key: LLM_PROVIDER
@@ -21,3 +21,8 @@ services:
         generateValue: true
       - key: JWT_EXPIRE_MINUTES
         value: "120"
+      - key: MONGODB_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+

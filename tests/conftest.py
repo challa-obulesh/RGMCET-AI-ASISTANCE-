@@ -23,6 +23,10 @@ os.environ.setdefault("DATABASE_NAME", "rgmcet_ai_assistant")
 os.environ.setdefault("JWT_SECRET", "test-jwt-secret-not-for-production-use-only")
 os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 # Now import and reset the store so each test session starts clean.
 from app.web_mvp import store as _store  # noqa: E402 — must come after env setup
 
