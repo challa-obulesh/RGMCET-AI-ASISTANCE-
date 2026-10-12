@@ -57,8 +57,8 @@ def _department_entity(text: str) -> str | None:
         (r"\binformation\s+technology\b|\bit\s+department\b", "Information Technology"),
         (r"\belectronics\s+(?:and|&)\s+communication(?:s)?\s+engineering\b|\bece\b", "Electronics and Communication Engineering"),
         (r"\belectrical\s+(?:and|&)\s+electronics\s+engineering\b|\beee\b", "Electrical and Electronics Engineering"),
-        (r"\bcivil\s+engineering\b|\bce\b", "Civil Engineering"),
-        (r"\bmechanical\s+engineering\b|\bme\b", "Mechanical Engineering"),
+        (r"\bcivil\s+engineering\b|\bcivil\b|\bce\s+(?:dept|department)\b", "Civil Engineering"),
+        (r"\bmechanical\s+engineering\b|\bmechanical\b|\bmech\b|\bme\s+(?:dept|department)\b", "Mechanical Engineering"),
         (r"\bmba\b|\bmanagement\s+studies\b", "Master of Business Administration"),
         (r"\bmca\b|\bmaster\s+of\s+computer\s+applications\b", "Master of Computer Applications"),
     )
