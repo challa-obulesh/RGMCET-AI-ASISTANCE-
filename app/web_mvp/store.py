@@ -84,18 +84,22 @@ async def init_store() -> None:
                 _client.close()
             _client = None
             _database = None
-    if DEMO_MODE:
+    if DEMO_MODE or _database is None:
         _memory = _demo_documents()
         _using_demo_store = True
-        logger.warning("Web MVP is using in-memory DEMO DATA; changes will not persist")
+        if _database is None and not DEMO_MODE:
+            logger.warning("MongoDB unavailable; automatically falling back to in-memory demo store")
+        else:
+            logger.warning("Web MVP is using in-memory DEMO DATA; changes will not persist")
     else:
         _memory = {}
         _using_demo_store = False
 
 
 def reset_demo_data() -> None:
-    global _memory
+    global _memory, _using_demo_store
     _memory = _demo_documents()
+    _using_demo_store = True
 
 
 async def close_store() -> None:

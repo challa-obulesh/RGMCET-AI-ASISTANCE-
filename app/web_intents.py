@@ -44,7 +44,7 @@ class ParsedIntent(BaseModel):
 def _department_entity(text: str) -> str | None:
     lowered = text.casefold()
     department_names = (
-        (r"\b(cse\s*(?:\(\s*)?data\s*science|cse\s*ds|computer\s+science\s*(?:and|&)\s+engineering\s*\(\s*data\s+science\s*\))", "Computer Science and Engineering (Data Science)"),
+        (r"\b((?:cse\s*(?:\(\s*)?)?data\s*science|cse\s*ds|డేటా\s*సైన్స్|computer\s+science\s*(?:and|&)\s+engineering\s*\(\s*data\s+science\s*\))", "Computer Science and Engineering (Data Science)"),
         (r"\b(cse\s*(?:ai\s*(?:and|&)\s*ml|aiml)|artificial\s+intelligence\s+(?:and|&)\s+machine\s+learning)\b", "Computer Science and Engineering (Artificial Intelligence and Machine Learning)"),
         (r"\b(cse\s*(?:cyber\s*security)|cyber\s*security)\b", "Computer Science and Engineering (Cyber Security)"),
         (r"\b(cse\s*(?:and|&)\s*(?:business\s+)?systems|csbs|business\s+systems)\b", "Computer Science and Engineering and Business Systems"),
@@ -57,8 +57,8 @@ def _department_entity(text: str) -> str | None:
         (r"\binformation\s+technology\b|\bit\s+department\b", "Information Technology"),
         (r"\belectronics\s+(?:and|&)\s+communication(?:s)?\s+engineering\b|\bece\b", "Electronics and Communication Engineering"),
         (r"\belectrical\s+(?:and|&)\s+electronics\s+engineering\b|\beee\b", "Electrical and Electronics Engineering"),
-        (r"\bcivil\s+engineering\b|\bce\b", "Civil Engineering"),
-        (r"\bmechanical\s+engineering\b|\bme\b", "Mechanical Engineering"),
+        (r"\bcivil\s+engineering\b|\bcivil\b|\bce\s+(?:dept|department)\b", "Civil Engineering"),
+        (r"\bmechanical\s+engineering\b|\bmechanical\b|\bmech\b|\bme\s+(?:dept|department)\b", "Mechanical Engineering"),
         (r"\bmba\b|\bmanagement\s+studies\b", "Master of Business Administration"),
         (r"\bmca\b|\bmaster\s+of\s+computer\s+applications\b", "Master of Computer Applications"),
     )
@@ -162,7 +162,7 @@ def detect_web_intent(message: str) -> ParsedIntent:
     language = _language(text)
     professor = None
     if re.search(r"\b(cse\s*(?:ds|data\s*science)\s*hod|hod\s*of\s*cse\s*(?:ds|data\s*science))\b", lowered):
-        professor = "Dr. B. Bhaskara Rao"
+        professor = "Dr. B.Bhaskara Rao"
     else:
         professor_match = re.search(
             r"\b((?:prof(?:essor)?\.?|dr\.?\s*)?[a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*){0,2}\s+(?:sir|madam))\b|\b(?:prof(?:essor)?\.?|dr\.)\s+[a-z][a-z.'-]*(?:\s+[a-z][a-z.'-]*)?",
@@ -171,13 +171,33 @@ def detect_web_intent(message: str) -> ParsedIntent:
         )
         professor = professor_match.group(0).strip() if professor_match else None
         if professor is None:
-            bare_professor = re.search(
-                r"\b(?:is|show|find|what\s+is)\s+(?!(?:the|a|an)\b)([A-Z][a-z]+)(?:['’]s)?\b",
+            named_match = re.search(
+                r"\b(?:named|name\s+is|called)\s+([A-Za-z\.\s]+?)(?:\?|\.|\s*$|\s+(?:in|under|at|from))",
                 text,
                 re.I,
             )
-            if bare_professor:
-                professor = bare_professor.group(1)
+            if named_match:
+                professor = named_match.group(1).strip()
+            else:
+                telugu_ane = re.search(r"([A-Za-z\.\s\u0c00-\u0c7f]+?)\s+(?:ane|ani|అనే)\s+(?:faculty|professor|member|ఫ్యాకల్టీ|ఆచార్యులు)", text, re.I)
+                if telugu_ane:
+                    tokens = [t for t in telugu_ane.group(1).split() if t.casefold() not in {"lo", "లో", "vibhagam", "విభాగంలో", "dept", "department", "data", "science", "cse", "డేటా", "సైన్స్"}]
+                    if tokens:
+                        professor = tokens[-1].strip()
+                if not professor:
+                    bare_professor = re.search(
+                        r"\b(?:is|find|what\s+is|show)\s+(?!(?:the|a|an)\b)([A-Za-z]+)(?:['’]s)?\b",
+                        text,
+                        re.I,
+                    )
+                    if bare_professor:
+                        cand = bare_professor.group(1).strip()
+                        if cand.casefold() not in {
+                            "the", "a", "an", "all", "me", "cse", "cseds", "data", "science",
+                            "faculty", "faculties", "department", "our", "rgmcet", "list", "show",
+                            "any", "some", "my", "your", "there", "here"
+                        }:
+                            professor = cand
     if professor:
         professor = re.sub(
             r"^(?:(?:what|is|are|the|who|tell|me|about|can|could|may|i|we|want|to|book|schedule|meet|see|with)\s+)+",
@@ -187,7 +207,7 @@ def detect_web_intent(message: str) -> ParsedIntent:
         )
 
     department_entity = _department_entity(text)
-    asks_faculty = bool(re.search(r"\b(hod|faculty|faculties|who\s+teaches|professors?)\b", lowered))
+    asks_faculty = bool(re.search(r"\b(hod|faculty|faculties|who\s+teaches|professors?)\b", lowered)) or bool(re.search(r"(ఫ్యాకల్టీ|ఆచార్యులు|బోధకులు|ప్రొఫెసర్)", text))
 
     if any(term in lowered for term in ("cancel", "రద్దు")) and any(
         term in lowered or term in text for term in ("appointment", "booking", "meeting", "అపాయింట్", "సమావేశ")

@@ -40,7 +40,11 @@ def reset_store():
     store.reset_demo_data()
     store._memory.setdefault("audit_logs", []).clear()
     if original_vstore_bytes is not None:
-        VECTOR_STORE_PATH.write_bytes(original_vstore_bytes)
+        try:
+            if not VECTOR_STORE_PATH.exists() or VECTOR_STORE_PATH.read_bytes() != original_vstore_bytes:
+                VECTOR_STORE_PATH.write_bytes(original_vstore_bytes)
+        except OSError:
+            pass
     kn._store = None
 
 

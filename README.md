@@ -470,12 +470,55 @@ The project includes an extensive automated test suite covering all layers of th
 
 ---
 
-## 🛡️ Security Best Practices
+## 🛡️ Security Best Practices & Data Privacy Hardening
 
-* **No Secrets in Source Control**: Secrets, API keys, and connection strings must never be committed. The `.env` file is strictly ignored via `.gitignore`.
-* **Zero Client-Side Exposure**: Client-side JavaScript bundles never receive LLM API keys or database connection strings. All external API calls originate server-side.
-* **Server-Side Enforcement**: Role authorization is validated on every API request. UI button masking is paired with strict server-side HTTP 403 Forbidden enforcement.
-* **Production Key Management**: All production secrets are managed exclusively through cloud provider environment variables (Render Environment settings).
+### 1. Synthetic Demo Email Policy
+In compliance with RGMCET institutional data privacy guidelines, **no official faculty or staff email addresses are used in sample data, demonstration accounts, fixtures, or test seeds**.
+* **Reserved Example Domains**: All demo accounts use reserved RFC 2606 domains (e.g. `@example.com`, `@example.org`, `@example.net`).
+* **Canonical Demo Accounts**:
+  * **Admin**: `admin@example.com`
+  * **Professor / HOD**: `hod.cse.ds@example.com`
+  * **Verified Faculty**: `prasad.cseds@example.com`, `samunnisa.cseds@example.com`, etc.
+  * **Student**: `student1@example.com`
+* **Real Identity Separation**: While public faculty names and designations are retained for campus directory lookup, personal contact credentials and authentication records are strictly decoupled and synthetic.
+
+### 2. Centralized Privacy Gateway
+Every outbound request destined for an external hosted LLM provider (such as Google Gemini or OpenAI) must pass through the backend `PrivacyGateway` ([privacy_gateway.py](file:///c:/Users/chall/OneDrive/Desktop/whatsapp%20ai%20agent/app/web_mvp/privacy_gateway.py)):
+* **Data Minimization**: Only the specific user query and retrieved verified context needed to answer the question are transmitted.
+* **Email Redaction**: Automatic detection and redaction of email addresses (`[REDACTED_EMAIL]`).
+* **PII & Phone Redaction**: Phone numbers are redacted to `[REDACTED_PHONE]`.
+* **Credential Redaction**: JWT tokens (`[REDACTED_TOKEN]`), MongoDB/SQL connection strings (`[REDACTED_DB_CONNECTION]`), passwords, and API keys are automatically stripped.
+* **Prompt Boundary Separation**: System instructions, verified evidence context, and user input are strictly segregated into distinct payload blocks.
+* **Safe Fallback**: If privacy sanitization encounters an unexpected exception, the outbound transmission is aborted immediately (`complete()` returns `None`) rather than risking unredacted data leakage.
+* **Sanitized Logging**: Application logs never record raw prompts containing sensitive context or credentials; only sanitized metadata and redaction counts are logged.
+* **Outbound Deep Inspection**: Final JSON payloads are recursively inspected before dispatch to guarantee no sensitive tokens or emails escape.
+
+### 3. Role-Based Access Control (RBAC)
+* **Backend Enforced**: All access control decisions (Student, Professor, Admin) are enforced in FastAPI route dependencies via JWT validation and role checks.
+* **No LLM Authorization**: The system never relies on an LLM to decide or enforce access boundaries.
+* **Cross-Professor Isolation**: Professors can view and manage only their own scheduled appointments. Modifying or approving another professor's schedule or appointments returns HTTP 403 Forbidden.
+
+### 4. Deterministic Faculty Verification (Anti-Hallucination)
+* **Deterministic Lookups**: Inquiries regarding specific faculty members (e.g., *"Is there any Data Science faculty member named Stephen?"*) are verified deterministically against official RGMCET records before any LLM interaction.
+* **No Fictional Person Generation**: If no record matches, the system returns a verified no-match message:
+  > *"No matching faculty member named Stephen was found in the verified Data Science faculty records."*
+* The LLM is never permitted to invent faculty members or override verified database facts.
+
+### 5. Known Privacy Limitations
+* **Pattern-Based Matching**: The Privacy Gateway uses regular expressions and heuristic token analyzers. While effective against standard emails, phones, JWTs, and database URIs, it cannot guarantee 100% detection of oblique, fragmented, or adversarial PII patterns.
+* **Response Generation Only**: The external LLM is utilized exclusively for natural language response generation; official institutional records stored in verified data files remain the authoritative source of truth.
+
+### 6. Running Security & Privacy Tests
+```powershell
+# Run the dedicated automated privacy and security test suite (10 tests)
+.\.venv\Scripts\python.exe -m pytest tests/test_privacy_security.py -v
+
+# Run the complete regression test suite (246 tests)
+.\.venv\Scripts\python.exe -m pytest tests/ -q
+
+# Run visible Google Chrome end-to-end verification (headless=False)
+.\.venv\Scripts\python.exe scripts/verify_phase7_chrome_full.py
+```
 
 ---
 

@@ -449,3 +449,16 @@ async def test_concurrent_same_slot_requests_only_create_one_appointment(client)
     assert len(created) == 1
     assert len(failures) == 1
     assert failures[0].status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_store_graceful_demo_fallback_when_mongo_unreachable(monkeypatch):
+    """Verify store safely falls back to demo data if MongoDB is unreachable even with DEMO_MODE=False."""
+    from app.web_mvp import store
+    monkeypatch.setattr(store, "DEMO_MODE", False)
+    monkeypatch.setattr(store, "MONGODB_URI", "mongodb://nonexistent-host-domain.test:27017")
+    await store.init_store()
+    assert store.store_ready() is True
+    assert store._using_demo_store is True
+    assert len(store._memory.get("professors", [])) > 0
+    await store.close_store()

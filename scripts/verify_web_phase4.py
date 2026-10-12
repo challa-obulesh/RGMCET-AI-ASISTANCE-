@@ -10,8 +10,8 @@ async def verify_web_phase3():
     network_errors = []
 
     ts = int(time.time())
-    student_email = f"student_test_{ts}@rgmcet.edu.in"
-    prof_email = f"prof_test_{ts}@rgmcet.edu.in"
+    student_email = f"student_test_{ts}@example.com"
+    prof_email = f"prof_test_{ts}@example.com"
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -233,7 +233,7 @@ async def verify_web_phase3():
                 await page.click("#logout-button")
                 await page.wait_for_timeout(500)
                 
-            student2_email = f"student2_test_{ts}@rgmcet.edu.in"
+            student2_email = f"student2_test_{ts}@example.com"
             if await page.locator("#nav-login").count() > 0:
                 await page.click("#nav-login")
                 await page.wait_for_timeout(500)

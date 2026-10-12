@@ -242,14 +242,18 @@ def _all_verified_faculty() -> list[dict]:
                 name = r.get("name", "")
                 if "Bhaskara Rao" in name:
                     prof_id = "PROF-VERIFIED-CSEDS-002"
+                    name = "Dr. B.Bhaskara Rao"
+                    aliases = ["Dr. B.Bhaskara Rao", "Dr. B. Bhaskara Rao", "B. Bhaskara Rao", "Bhaskara Rao"]
                 elif "Penchala Prasad" in name:
                     prof_id = "PROF-VERIFIED-CSEDS-001"
+                    aliases = [name, "Dr. P. Penchala Prasad", "Dr. P.Penchala Prasad", "Penchala Prasad", "P. Penchala Prasad"]
                 else:
                     prof_id = f"PROF-VERIFIED-CSEDS-{idx+1:03d}"
+                    aliases = [name]
                 faculty_list.append({
                     "professor_id": prof_id,
                     "name": name,
-                    "aliases": [name],
+                    "aliases": aliases,
                     "department": r.get("department", "CSE (Data Science)"),
                     "designation": r.get("designation", "Faculty"),
                     "official_email": r.get("official_email"),
@@ -614,6 +618,114 @@ def search_knowledge(query: str, collection: str) -> list[dict]:
     return matches
 
 
+def _deterministic_faculty_lookup(
+    search_name: str,
+    department_name: str | None,
+    language: str = "English",
+    message: str = "",
+) -> tuple[str, bool, list[dict]] | None:
+    """Deterministically verifies faculty existence against verified records.
+    
+    Prevents hallucinating faculty names or existence.
+    Returns: (reply, verified, sources) or None if search_name is invalid.
+    """
+    cleaned = re.sub(r"\b(dr|prof|professor|sir|madam|mr|mrs|ms)\b\.?", "", search_name, flags=re.I).strip(" ?.,!':;")
+    if not cleaned or len(cleaned) < 2 or cleaned.casefold() in {
+        "details", "list", "members", "member", "info", "information", "the", "a", "an", "any",
+        "cse", "cseds", "data", "science", "faculty", "faculties", "department", "all", "our"
+    }:
+        return None
+
+    if not department_name and message:
+        from app.web_intents import _department_entity
+        department_name = _department_entity(message)
+
+    # Determine department label and scope
+    dept_label = "RGMCET"
+    dept_filter = None
+    if department_name:
+        dept_lower = department_name.casefold()
+        if "data science" in dept_lower or "cseds" in dept_lower:
+            dept_label = "Data Science"
+            dept_filter = "data science"
+        elif "artificial intelligence" in dept_lower or "aiml" in dept_lower or "ai" in dept_lower:
+            dept_label = "AI & ML"
+            dept_filter = "aiml"
+        elif "cyber" in dept_lower:
+            dept_label = "Cyber Security"
+            dept_filter = "cyber"
+        elif "business" in dept_lower or "csbs" in dept_lower:
+            dept_label = "Business Systems"
+            dept_filter = "business"
+        elif "computer science" in dept_lower or "cse" in dept_lower:
+            dept_label = "Computer Science"
+            dept_filter = "computer science"
+        elif "civil" in dept_lower:
+            dept_label = "Civil Engineering"
+            dept_filter = "civil"
+        elif "mechanical" in dept_lower:
+            dept_label = "Mechanical Engineering"
+            dept_filter = "mechanical"
+        elif "ece" in dept_lower or "electronics" in dept_lower:
+            dept_label = "ECE"
+            dept_filter = "electronics"
+        elif "eee" in dept_lower or "electrical" in dept_lower:
+            dept_label = "EEE"
+            dept_filter = "electrical"
+        elif "it" in dept_lower or "information technology" in dept_lower:
+            dept_label = "Information Technology"
+            dept_filter = "information technology"
+        else:
+            dept_label = department_name
+
+    verified_faculty = _all_verified_faculty()
+    if dept_filter:
+        scoped_faculty = [
+            f for f in verified_faculty
+            if dept_filter in f.get("department", "").casefold()
+        ]
+    else:
+        scoped_faculty = verified_faculty
+
+    token = cleaned.casefold()
+    matched = None
+    for prof in scoped_faculty:
+        prof_name = prof.get("name", "").casefold()
+        aliases = [a.casefold() for a in prof.get("aliases", [])]
+        if token in prof_name or any(token in a for a in aliases):
+            matched = prof
+            break
+
+    if matched:
+        if language == "Telugu":
+            reply = f"అవును, ధృవీకరించిన {dept_label} ఫ్యాకల్టీ రికార్డులలో {matched['name']} ({matched.get('designation', 'ఫ్యాకల్టీ')}) ఉన్నారు."
+        elif language == "Roman Telugu":
+            reply = f"Avunu, verified {dept_label} records prakaram {matched['name']} ({matched.get('designation', 'Faculty')}) unnaru."
+        else:
+            reply = f"Yes, {matched['name']} is listed as {matched.get('designation', 'Faculty')} in the verified {dept_label} faculty records."
+        sources = [{
+            "title": matched["name"],
+            "url": matched.get("source_url") or "https://www.rgmcet.edu.in/cseds_faculty1.php",
+            "department": matched.get("department", dept_label),
+        }]
+        return reply, True, sources
+    else:
+        if language == "Telugu":
+            reply = f"ధృవీకరించిన {dept_label} ఫ్యాకల్టీ రికార్డులలో '{cleaned}' పేరుతో సరిపోలే ఫ్యాకల్టీ సభ్యులు ఎవరూ కనుగొనబడలేదు (ప్రస్తుత జాబితాలో లేరు)."
+        elif language == "Roman Telugu":
+            reply = f"Verified {dept_label} faculty records lo '{cleaned}' ane peru tho ye faculty member dorakaledu (current list lo leru)."
+        else:
+            reply = f"No matching faculty member named {cleaned} was found in the verified {dept_label} faculty records. This person is not listed in the verified faculty records."
+
+        source_url = "https://www.rgmcet.edu.in/cseds_faculty1.php" if dept_label == "Data Science" else "https://www.rgmcet.edu.in"
+        sources = [{
+            "title": f"RGMCET {dept_label} Official Faculty Directory",
+            "url": source_url,
+            "department": dept_label,
+        }]
+        return reply, True, sources
+
+
 async def answer_chat(message: str, session_id: str | None, student_id: str) -> tuple[str, str, str, str, bool, list[dict[str, str]]]:
     parsed = await classify(message)
     session = session_id or f"chat-{uuid4().hex[:12]}"
@@ -661,6 +773,20 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
     logger.info("Web chat intent=%s (effective=%s) session=%s student=%s", parsed.intent, eff_intent, session, student_id)
     reply = "I could not find a verified answer for that yet. Please try asking about a listed facility, department, professor, or schedule."
     factual_intents = {"CAMPUS_INFORMATION", "DEPARTMENT_INFORMATION", "FACILITY_INFORMATION", "FACULTY_INFORMATION"}
+
+    # PHASE 4: Deterministic verification for specific faculty existence / inquiries
+    target_prof_query = parsed.professor or ctx.get("professor")
+    if not target_prof_query:
+        named_m = re.search(r"\b(?:named|name\s+is|called)\s+([A-Za-z\.\s]+?)(?:\?|\.|\s*$|\s+(?:in|under|at|from))", message, re.I)
+        if named_m:
+            target_prof_query = named_m.group(1).strip()
+    if target_prof_query and (eff_intent in {"FACULTY_INFORMATION", "PROFESSOR_INFORMATION", "GENERAL_QUERY", "UNKNOWN"} or "faculty" in lowered_msg or "member" in lowered_msg):
+        if not any(term in lowered_msg for term in ("meet", "appointment", "schedule", "book", "available", "slots")):
+            det_result = _deterministic_faculty_lookup(target_prof_query, parsed.entity, language)
+            if det_result:
+                det_reply, det_ver, det_srcs = det_result
+                await store.append_chat_turn(session, student_id, message, det_reply, "FACULTY_INFORMATION", language)
+                return det_reply, "FACULTY_INFORMATION", language, session, det_ver, det_srcs
 
     if eff_intent == "PROFESSOR_INFORMATION" and not parsed.professor and not ctx.get("professor"):
         official_records = await retrieve_verified(message, "FACULTY_INFORMATION", parsed.entity)
@@ -955,6 +1081,20 @@ async def legacy_answer_chat(message: str, session_id: str | None, student_id: s
     logger.info("Web chat intent=%s (effective=%s) session=%s student=%s", parsed.intent, eff_intent, session, student_id)
     reply = "I could not find a verified answer for that yet. Please try asking about a listed facility, department, professor, or schedule."
     factual_intents = {"CAMPUS_INFORMATION", "DEPARTMENT_INFORMATION", "FACILITY_INFORMATION", "FACULTY_INFORMATION"}
+
+    # PHASE 4: Deterministic verification for specific faculty existence / inquiries
+    target_prof_query = parsed.professor or ctx.get("professor")
+    if not target_prof_query:
+        named_m = re.search(r"\b(?:named|name\s+is|called)\s+([A-Za-z\.\s]+?)(?:\?|\.|\s*$|\s+(?:in|under|at|from))", message, re.I)
+        if named_m:
+            target_prof_query = named_m.group(1).strip()
+    if target_prof_query and (eff_intent in {"FACULTY_INFORMATION", "PROFESSOR_INFORMATION", "GENERAL_QUERY", "UNKNOWN"} or "faculty" in lowered_msg or "member" in lowered_msg):
+        if not any(term in lowered_msg for term in ("meet", "appointment", "schedule", "book", "available", "slots")):
+            det_result = _deterministic_faculty_lookup(target_prof_query, parsed.entity, language)
+            if det_result:
+                det_reply, det_ver, det_srcs = det_result
+                await store.append_chat_turn(session, student_id, message, det_reply, "FACULTY_INFORMATION", language)
+                return det_reply, "FACULTY_INFORMATION", language, session, det_ver, det_srcs
 
     if eff_intent == "PROFESSOR_INFORMATION" and not parsed.professor and not ctx.get("professor"):
         official_records = await retrieve_verified(message, "FACULTY_INFORMATION", parsed.entity)

@@ -10,8 +10,8 @@ async def verify_web_phase3():
     network_errors = []
 
     ts = int(time.time())
-    student_email = f"student_test_{ts}@rgmcet.edu.in"
-    prof_email = f"prof_test_{ts}@rgmcet.edu.in"
+    student_email = f"student_test_{ts}@example.com"
+    prof_email = f"prof_test_{ts}@example.com"
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)

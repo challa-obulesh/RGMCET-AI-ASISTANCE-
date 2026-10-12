@@ -13,20 +13,20 @@ def register_users():
     try:
         requests.post(base_url, json={
             "name": "Student A",
-            "email": "21091A0501@rgmcet.edu.in",
+            "email": "student1@example.com",
             "password": "password",
             "role": "student"
         })
         resp = requests.post(base_url, json={
             "name": "Dr. Bhaskara Rao",
-            "email": "b.bhaskararao@rgmcet.edu.in",
+            "email": "hod.cse.ds@example.com",
             "password": "password",
             "role": "professor"
         })
         print("Users registered successfully.")
         # Login as professor and set up a weekly schedule so slots are available
         login_resp = requests.post(login_url, json={
-            "email": "b.bhaskararao@rgmcet.edu.in",
+            "email": "hod.cse.ds@example.com",
             "password": "password"
         })
         if login_resp.status_code == 200:
@@ -73,7 +73,7 @@ async def run_phase7_verification():
             print("Testing R02: Student Login")
             await page.click('#nav-login')
             await page.wait_for_selector(".auth-page", timeout=5000)
-            await page.fill('input[type="email"]', "21091A0501@rgmcet.edu.in")
+            await page.fill('input[type="email"]', "student1@example.com")
             await page.fill('input[type="password"]', "password")
             await page.click('button[type="submit"]')
             await page.wait_for_selector(".chat-view", timeout=5000)
@@ -205,7 +205,7 @@ async def run_phase7_verification():
             
             # R13 - Professor Dashboard
             print("Testing R13: Professor Dashboard")
-            await page.fill('input[type="email"]', "b.bhaskararao@rgmcet.edu.in")
+            await page.fill('input[type="email"]', "hod.cse.ds@example.com")
             await page.fill('input[type="password"]', "password")
             await page.click('button[type="submit"]')
             await page.wait_for_selector(".dashboard-page", timeout=5000)

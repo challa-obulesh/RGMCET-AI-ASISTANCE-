@@ -48,14 +48,14 @@ def register_and_approve_professor(client, name, email, password, prof_id, depar
         "/api/auth/register",
         json={
             "name": "Super Admin",
-            "email": "admin.master@rgmcet.edu.in",
+            "email": "admin.master@example.com",
             "password": "AdminMasterPass123!",
             "role": "admin",
         },
     )
     admin_login = client.post(
         "/api/auth/login",
-        json={"email": "admin.master@rgmcet.edu.in", "password": "AdminMasterPass123!"},
+        json={"email": "admin.master@example.com", "password": "AdminMasterPass123!"},
     )
     admin_token = admin_login.json()["access_token"]
 
@@ -76,7 +76,7 @@ def register_and_approve_professor(client, name, email, password, prof_id, depar
     return prof_login.json()["access_token"], prof_user_id, prof_login.json()
 
 
-def register_student(client, name="Rahul Kumar", email="rahul.student@rgmcet.edu.in"):
+def register_student(client, name="Rahul Kumar", email="rahul.student@example.com"):
     s_reg = client.post(
         "/api/auth/register",
         json={
@@ -101,7 +101,7 @@ def test_1_professor_a_sees_professor_a_dashboard(client):
     token_a, _, user_a = register_and_approve_professor(
         client,
         name="Dr. B. Bhaskara Rao",
-        email="bhaskara.rao@rgmcet.edu.in",
+        email="bhaskara.rao@example.com",
         password="ProfPass123!",
         prof_id="PROF-TEST-A",
         department="Computer Science and Engineering",
@@ -124,7 +124,7 @@ def test_2_professor_b_sees_professor_b_dashboard(client):
     token_b, _, user_b = register_and_approve_professor(
         client,
         name="Dr. K. Subba Rao",
-        email="subba.rao@rgmcet.edu.in",
+        email="subba.rao@example.com",
         password="ProfPass123!",
         prof_id="PROF-TEST-B",
         department="Information Technology",
@@ -145,7 +145,7 @@ def test_3_professor_a_cannot_access_professor_b_appointment(client):
     token_a, _, _ = register_and_approve_professor(
         client,
         name="Dr. Bhaskara A",
-        email="prof.a@rgmcet.edu.in",
+        email="prof.a@example.com",
         password="ProfPasswordA1!",
         prof_id="PROF-A",
         department="CSE",
@@ -153,7 +153,7 @@ def test_3_professor_a_cannot_access_professor_b_appointment(client):
     token_b, _, _ = register_and_approve_professor(
         client,
         name="Dr. Subba B",
-        email="prof.b@rgmcet.edu.in",
+        email="prof.b@example.com",
         password="ProfPasswordB1!",
         prof_id="PROF-B",
         department="ECE",
@@ -195,7 +195,7 @@ def test_4_professor_b_cannot_approve_professor_a_appointment(client):
     _, _, _ = register_and_approve_professor(
         client,
         name="Dr. Bhaskara A",
-        email="prof.a2@rgmcet.edu.in",
+        email="prof.a2@example.com",
         password="ProfPasswordA1!",
         prof_id="PROF-A2",
         department="CSE",
@@ -203,7 +203,7 @@ def test_4_professor_b_cannot_approve_professor_a_appointment(client):
     token_b, _, _ = register_and_approve_professor(
         client,
         name="Dr. Subba B",
-        email="prof.b2@rgmcet.edu.in",
+        email="prof.b2@example.com",
         password="ProfPasswordB1!",
         prof_id="PROF-B2",
         department="ECE",
@@ -240,7 +240,7 @@ def test_5_professor_a_can_approve_their_own_pending_request(client):
     token_a, _, _ = register_and_approve_professor(
         client,
         name="Dr. Bhaskara A3",
-        email="prof.a3@rgmcet.edu.in",
+        email="prof.a3@example.com",
         password="ProfPasswordA1!",
         prof_id="PROF-A3",
         department="CSE",
@@ -278,7 +278,7 @@ def test_6_student_cannot_approve_appointment(client):
     register_and_approve_professor(
         client,
         name="Dr. Bhaskara A4",
-        email="prof.a4@rgmcet.edu.in",
+        email="prof.a4@example.com",
         password="ProfPasswordA1!",
         prof_id="PROF-A4",
         department="CSE",
@@ -314,7 +314,7 @@ def test_7_admin_can_approve_reject_professor_accounts(client):
         "/api/auth/register",
         json={
             "name": "Dr. Candidate",
-            "email": "prof.candidate@rgmcet.edu.in",
+            "email": "prof.candidate@example.com",
             "password": "Password123!",
             "role": "professor",
             "department": "Mechanical Engineering",
@@ -329,14 +329,14 @@ def test_7_admin_can_approve_reject_professor_accounts(client):
         "/api/auth/register",
         json={
             "name": "Head Admin",
-            "email": "head.admin@rgmcet.edu.in",
+            "email": "head.admin@example.com",
             "password": "HeadAdminPassword123!",
             "role": "admin",
         },
     )
     admin_login = client.post(
         "/api/auth/login",
-        json={"email": "head.admin@rgmcet.edu.in", "password": "HeadAdminPassword123!"},
+        json={"email": "head.admin@example.com", "password": "HeadAdminPassword123!"},
     )
     admin_token = admin_login.json()["access_token"]
 
@@ -365,7 +365,7 @@ def test_8_pending_professor_cannot_use_professor_dashboard(client):
         "/api/auth/register",
         json={
             "name": "Dr. Pending Prof",
-            "email": "pending.prof@rgmcet.edu.in",
+            "email": "pending.prof@example.com",
             "password": "Password123!",
             "role": "professor",
             "department": "Civil Engineering",
@@ -377,7 +377,7 @@ def test_8_pending_professor_cannot_use_professor_dashboard(client):
     # Login rejected with 403
     login_res = client.post(
         "/api/auth/login",
-        json={"email": "pending.prof@rgmcet.edu.in", "password": "Password123!"},
+        json={"email": "pending.prof@example.com", "password": "Password123!"},
     )
     assert login_res.status_code == 403
     assert "pending admin approval" in login_res.json()["detail"].lower()
@@ -395,7 +395,7 @@ def test_9_rejected_professor_cannot_use_professor_dashboard(client):
         "/api/auth/register",
         json={
             "name": "Dr. Rejected Prof",
-            "email": "rejected.prof@rgmcet.edu.in",
+            "email": "rejected.prof@example.com",
             "password": "Password123!",
             "role": "professor",
             "department": "Civil Engineering",
@@ -407,9 +407,9 @@ def test_9_rejected_professor_cannot_use_professor_dashboard(client):
     # Register admin and mark professor as REJECTED
     client.post(
         "/api/auth/register",
-        json={"name": "Admin", "email": "adm9@rgmcet.edu.in", "password": "AdminPassword123!", "role": "admin"},
+        json={"name": "Admin", "email": "adm9@example.com", "password": "AdminPassword123!", "role": "admin"},
     )
-    admin_login = client.post("/api/auth/login", json={"email": "adm9@rgmcet.edu.in", "password": "AdminPassword123!"})
+    admin_login = client.post("/api/auth/login", json={"email": "adm9@example.com", "password": "AdminPassword123!"})
     admin_token = admin_login.json()["access_token"]
     client.patch(
         f"/api/admin/professors/{prof_user_id}/status",
@@ -420,7 +420,7 @@ def test_9_rejected_professor_cannot_use_professor_dashboard(client):
     # Login fails with 403
     login_res = client.post(
         "/api/auth/login",
-        json={"email": "rejected.prof@rgmcet.edu.in", "password": "Password123!"},
+        json={"email": "rejected.prof@example.com", "password": "Password123!"},
     )
     assert login_res.status_code == 403
     assert "has not been approved" in login_res.json()["detail"].lower()
@@ -437,7 +437,7 @@ def test_10_suspended_professor_cannot_use_professor_dashboard(client):
         "/api/auth/register",
         json={
             "name": "Dr. Suspended Prof",
-            "email": "suspended.prof@rgmcet.edu.in",
+            "email": "suspended.prof@example.com",
             "password": "Password123!",
             "role": "professor",
             "department": "Civil Engineering",
@@ -449,9 +449,9 @@ def test_10_suspended_professor_cannot_use_professor_dashboard(client):
     # Register admin and mark professor as SUSPENDED
     client.post(
         "/api/auth/register",
-        json={"name": "Admin", "email": "adm10@rgmcet.edu.in", "password": "AdminPassword123!", "role": "admin"},
+        json={"name": "Admin", "email": "adm10@example.com", "password": "AdminPassword123!", "role": "admin"},
     )
-    admin_login = client.post("/api/auth/login", json={"email": "adm10@rgmcet.edu.in", "password": "AdminPassword123!"})
+    admin_login = client.post("/api/auth/login", json={"email": "adm10@example.com", "password": "AdminPassword123!"})
     admin_token = admin_login.json()["access_token"]
     client.patch(
         f"/api/admin/professors/{prof_user_id}/status",
@@ -462,7 +462,7 @@ def test_10_suspended_professor_cannot_use_professor_dashboard(client):
     # Login fails with 403
     login_res = client.post(
         "/api/auth/login",
-        json={"email": "suspended.prof@rgmcet.edu.in", "password": "Password123!"},
+        json={"email": "suspended.prof@example.com", "password": "Password123!"},
     )
     assert login_res.status_code == 403
     assert "suspended" in login_res.json()["detail"].lower()
@@ -478,7 +478,7 @@ def test_11_approved_professor_can_login(client):
     token, _, user = register_and_approve_professor(
         client,
         name="Dr. Verified Professor",
-        email="verified.prof@rgmcet.edu.in",
+        email="verified.prof@example.com",
         password="VerifiedPassword123!",
         prof_id="PROF-VERIFIED",
         department="ECE",
@@ -493,7 +493,7 @@ def test_12_student_sees_correct_appointment_status_after_approval(client):
     token_prof, _, _ = register_and_approve_professor(
         client,
         name="Dr. Subba Rao Faculty",
-        email="subba.faculty@rgmcet.edu.in",
+        email="subba.faculty@example.com",
         password="Password123!",
         prof_id="PROF-SUBBA-FACULTY",
         department="ECE",
@@ -536,7 +536,7 @@ def test_13_professor_can_only_modify_their_own_schedule(client):
     token_a, _, _ = register_and_approve_professor(
         client,
         name="Dr. Schedule Owner",
-        email="sched.owner@rgmcet.edu.in",
+        email="sched.owner@example.com",
         password="Password123!",
         prof_id="PROF-OWNER",
         department="CSE",
@@ -563,7 +563,7 @@ def test_14_professor_cannot_modify_another_professors_schedule(client):
     token_a, _, _ = register_and_approve_professor(
         client,
         name="Dr. Attacker Prof",
-        email="attacker.prof@rgmcet.edu.in",
+        email="attacker.prof@example.com",
         password="Password123!",
         prof_id="PROF-ATTACKER",
         department="CSE",
@@ -571,7 +571,7 @@ def test_14_professor_cannot_modify_another_professors_schedule(client):
     register_and_approve_professor(
         client,
         name="Dr. Victim Prof",
-        email="victim.prof@rgmcet.edu.in",
+        email="victim.prof@example.com",
         password="Password123!",
         prof_id="PROF-VICTIM",
         department="ECE",

@@ -4,12 +4,12 @@ import { api, DEMO_STUDENT_ID } from '../services/api.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
 const suggestions = [
-  { text: 'What is CSE Data Science?', icon: GraduationCap },
+  { text: 'What is the intake of CSE Data Science?', icon: GraduationCap },
   { text: 'Who is the HOD of CSE Data Science?', icon: Users },
+  { text: 'library ekkada undi?', icon: LibraryBig },
+  { text: 'లైబ్రరీ ఎక్కడ ఉంది?', icon: Building2 },
+  { text: 'How do I book an appointment with a professor?', icon: Sparkles },
   { text: 'What facilities are available on campus?', icon: Building2 },
-  { text: 'Does RGMCET have a library?', icon: LibraryBig },
-  { text: 'Tell me about RGMCET.', icon: Sparkles },
-  { text: 'Ravi sir schedule enti?', icon: Users },
 ]
 
 export default function ChatWindow({ resetKey, activeConversationId, onNewConversation }) {

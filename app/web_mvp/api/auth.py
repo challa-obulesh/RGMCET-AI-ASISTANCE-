@@ -69,10 +69,11 @@ async def register(request: UserRegisterRequest):
         # Do NOT allow arbitrary users to create a professor account using any random Gmail address.
         # Must match a faculty record verified from official RGMCET source or authorized domain in tests.
         from app.web_mvp.config import DEMO_MODE
-        if not prof and not (email_lower.endswith("@rgmcet.edu.in") or email_lower.endswith(".example") or "test" in email_lower or DEMO_MODE):
+        allowed_synthetic = email_lower.endswith(("@example.com", "@example.org", "@example.net", ".example"))
+        if not prof and not (email_lower.endswith("@rgmcet.edu.in") or allowed_synthetic or "test" in email_lower or DEMO_MODE):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Professor registration requires a verified official RGMCET faculty profile or email.",
+                detail="Professor registration requires a verified faculty profile or authorized demo email.",
             )
 
         if request.professor_id:
@@ -103,7 +104,7 @@ async def register(request: UserRegisterRequest):
                 "professor_id": professor_id,
                 "name": user_doc["name"],
                 "email": email_lower,
-                "official_email": email_lower if email_lower.endswith("@rgmcet.edu.in") else None,
+                "official_email": email_lower if (email_lower.endswith("@rgmcet.edu.in") or allowed_synthetic) else None,
                 "department": user_doc["department"],
                 "designation": user_doc.get("designation", "Assistant Professor"),
                 "schedule": default_schedule,
