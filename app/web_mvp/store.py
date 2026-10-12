@@ -97,8 +97,9 @@ async def init_store() -> None:
 
 
 def reset_demo_data() -> None:
-    global _memory
+    global _memory, _using_demo_store
     _memory = _demo_documents()
+    _using_demo_store = True
 
 
 async def close_store() -> None:
