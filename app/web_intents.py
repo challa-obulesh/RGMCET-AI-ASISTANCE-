@@ -172,18 +172,32 @@ def detect_web_intent(message: str) -> ParsedIntent:
         professor = professor_match.group(0).strip() if professor_match else None
         if professor is None:
             named_match = re.search(
-                r"\b(?:named|name\s+is|called)\s+([A-Za-z\.\s]+?)(?:\?|\.|\s*$|\s+(?:in|under|at|from))",
+                r"\b(?:named|name\s+is|called|name\s+(?:with|as|like)|named\s+as|with\s+(?:the\s+)?name(?:\s+as)?|with\s+name|anyone\s+named|someone\s+named|faculty\s+named|member\s+named|staff\s+named|person\s+named)\s+([A-Za-z\.\s]+?)(?:\?|\.|\s*$|\s+(?:in|under|at|from|department|dept|faculty|vibhagam))",
                 text,
                 re.I,
             )
             if named_match:
                 professor = named_match.group(1).strip()
             else:
-                telugu_ane = re.search(r"([A-Za-z\.\s\u0c00-\u0c7f]+?)\s+(?:ane|ani|అనే)\s+(?:faculty|professor|member|ఫ్యాకల్టీ|ఆచార్యులు)", text, re.I)
+                telugu_ane = re.search(r"([A-Za-z\.\s\u0c00-\u0c7f]+?)\s+(?:ane|ani|అనే)\s+(?:peru\s+tho|పేరుతో|faculty|professor|member|ఫ్యాకల్టీ|ఆచార్యులు)", text, re.I)
                 if telugu_ane:
                     tokens = [t for t in telugu_ane.group(1).split() if t.casefold() not in {"lo", "లో", "vibhagam", "విభాగంలో", "dept", "department", "data", "science", "cse", "డేటా", "సైన్స్"}]
                     if tokens:
                         professor = tokens[-1].strip()
+                if not professor:
+                    any_m = re.search(
+                        r"\b(?:is\s+there\s+(?:any\s+)?|any\s+|is\s+)([A-Za-z]+)\s+in\s+(?:(?:the\s+)?(?:data\s+science|cse\s*ds|cse|ece|eee|mechanical|civil|it|rgmcet)\s+)?(?:faculty|department|dept)\b",
+                        text,
+                        re.I,
+                    )
+                    if any_m:
+                        cand = any_m.group(1).strip()
+                        if cand.casefold() not in {
+                            "the", "a", "an", "all", "me", "cse", "cseds", "data", "science",
+                            "faculty", "faculties", "department", "our", "rgmcet", "list", "show",
+                            "any", "some", "my", "your", "there", "here", "one", "body", "person", "member"
+                        }:
+                            professor = cand
                 if not professor:
                     bare_professor = re.search(
                         r"\b(?:is|find|what\s+is|show)\s+(?!(?:the|a|an)\b)([A-Za-z]+)(?:['’]s)?\b",
@@ -200,11 +214,11 @@ def detect_web_intent(message: str) -> ParsedIntent:
                             professor = cand
     if professor:
         professor = re.sub(
-            r"^(?:(?:what|is|are|the|who|tell|me|about|can|could|may|i|we|want|to|book|schedule|meet|see|with)\s+)+",
+            r"^(?:(?:what|is|are|the|who|tell|me|about|can|could|may|i|we|want|to|book|schedule|meet|see|with|any|there|name)\s+)+",
             "",
             professor,
             flags=re.I,
-        )
+        ).strip(" ?.,!':;")
 
     department_entity = _department_entity(text)
     asks_faculty = bool(re.search(r"\b(hod|faculty|faculties|who\s+teaches|professors?)\b", lowered)) or bool(re.search(r"(ఫ్యాకల్టీ|ఆచార్యులు|బోధకులు|ప్రొఫెసర్)", text))

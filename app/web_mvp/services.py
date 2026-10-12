@@ -55,12 +55,18 @@ def _sources(records: list[dict]) -> list[dict[str, str]]:
             unique.setdefault(url, {'title': title, 'url': url, 'department': dept, 'last_checked': date})
     return list(unique.values())
 
-def _local_verified_answer(records: list[dict], intent: str) -> str:
+def _local_verified_answer(records: list[dict], intent: str, message: str = "") -> str:
     if intent == "FACULTY_INFORMATION":
         faculty = [record for record in records if record.get("kind") == "faculty"]
         if len(faculty) == 1:
             person = faculty[0]
             return f"According to RGMCET's official faculty page, {person['name']} is {person['designation']} in {person['department']} (qualification: {person['qualification']})."
+        if message:
+            lowered_m = message.lower()
+            asks_for_list = bool(re.search(r"\b(list|all|who are the|show all|complete list|give me the list|names of all)\b", lowered_m))
+            asks_specific = bool(re.search(r"\b(is there|is anyone|anyone|any\s+(?:one|name|person|faculty|member)|named|called|who is)\b", lowered_m))
+            if asks_specific and not asks_for_list:
+                return "No matching faculty member was found in the verified RGMCET faculty records according to the official records."
         return "Official RGMCET faculty listed: " + "; ".join(
             f"{person['name']} ({person['designation']})" for person in faculty
         )
@@ -710,12 +716,13 @@ def _deterministic_faculty_lookup(
         }]
         return reply, True, sources
     else:
+        display_name = cleaned.capitalize() if cleaned.islower() else cleaned
         if language == "Telugu":
-            reply = f"ధృవీకరించిన {dept_label} ఫ్యాకల్టీ రికార్డులలో '{cleaned}' పేరుతో సరిపోలే ఫ్యాకల్టీ సభ్యులు ఎవరూ కనుగొనబడలేదు (ప్రస్తుత జాబితాలో లేరు)."
+            reply = f"ధృవీకరించిన {dept_label} ఫ్యాకల్టీ రికార్డులలో '{display_name}' పేరుతో సరిపోలే ఫ్యాకల్టీ సభ్యులు ఎవరూ కనుగొనబడలేదు (ప్రస్తుత జాబితాలో లేరు). RGMCET {dept_label} అధికారిక రికార్డుల ప్రకారం ఈ పేరుతో ఏ ఫ్యాకల్టీ సభ్యులు లేరు."
         elif language == "Roman Telugu":
-            reply = f"Verified {dept_label} faculty records lo '{cleaned}' ane peru tho ye faculty member dorakaledu (current list lo leru)."
+            reply = f"Verified {dept_label} faculty records lo '{display_name}' ane peru tho ye faculty member dorakaledu (current list lo leru). RGMCET official {dept_label} records prakaram e peru tho faculty member leru."
         else:
-            reply = f"No matching faculty member named {cleaned} was found in the verified {dept_label} faculty records. This person is not listed in the verified faculty records."
+            reply = f"No matching faculty member named {display_name} was found in the verified {dept_label} faculty records. This person is not listed in the verified faculty records. According to the official {dept_label} faculty records in RGMCET, there is no faculty member with this name."
 
         source_url = "https://www.rgmcet.edu.in/cseds_faculty1.php" if dept_label == "Data Science" else "https://www.rgmcet.edu.in"
         sources = [{
@@ -777,12 +784,31 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
     # PHASE 4: Deterministic verification for specific faculty existence / inquiries
     target_prof_query = parsed.professor or ctx.get("professor")
     if not target_prof_query:
-        named_m = re.search(r"\b(?:named|name\s+is|called)\s+([A-Za-z\.\s]+?)(?:\?|\.|\s*$|\s+(?:in|under|at|from))", message, re.I)
+        named_m = re.search(
+            r"\b(?:named|name\s+is|called|name\s+(?:with|as|like)|named\s+as|with\s+(?:the\s+)?name(?:\s+as)?|with\s+name|anyone\s+named|someone\s+named|faculty\s+named|member\s+named|staff\s+named|person\s+named)\s+([A-Za-z\.\s]+?)(?:\?|\.|\s*$|\s+(?:in|under|at|from|department|dept|faculty|vibhagam))",
+            message,
+            re.I,
+        )
         if named_m:
             target_prof_query = named_m.group(1).strip()
+        else:
+            any_m = re.search(
+                r"\b(?:is\s+there\s+(?:any\s+)?|any\s+|is\s+)([A-Za-z]+)\s+in\s+(?:(?:the\s+)?(?:data\s+science|cse\s*ds|cse|ece|eee|mechanical|civil|it|rgmcet)\s+)?(?:faculty|department|dept)\b",
+                message,
+                re.I,
+            )
+            if any_m:
+                cand = any_m.group(1).strip()
+                if cand.casefold() not in {
+                    "the", "a", "an", "all", "me", "cse", "cseds", "data", "science",
+                    "faculty", "faculties", "department", "our", "rgmcet", "list", "show",
+                    "any", "some", "my", "your", "there", "here", "one", "body", "person", "member"
+                }:
+                    target_prof_query = cand
+
     if target_prof_query and (eff_intent in {"FACULTY_INFORMATION", "PROFESSOR_INFORMATION", "GENERAL_QUERY", "UNKNOWN"} or "faculty" in lowered_msg or "member" in lowered_msg):
         if not any(term in lowered_msg for term in ("meet", "appointment", "schedule", "book", "available", "slots")):
-            det_result = _deterministic_faculty_lookup(target_prof_query, parsed.entity, language)
+            det_result = _deterministic_faculty_lookup(target_prof_query, parsed.entity, language, message=message)
             if det_result:
                 det_reply, det_ver, det_srcs = det_result
                 await store.append_chat_turn(session, student_id, message, det_reply, "FACULTY_INFORMATION", language)
@@ -791,7 +817,7 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
     if eff_intent == "PROFESSOR_INFORMATION" and not parsed.professor and not ctx.get("professor"):
         official_records = await retrieve_verified(message, "FACULTY_INFORMATION", parsed.entity)
         if official_records:
-            fallback = _local_verified_answer(official_records, "FACULTY_INFORMATION")
+            fallback = _local_verified_answer(official_records, "FACULTY_INFORMATION", message=message)
             reply = await _grounded_response(message, language, official_records, fallback)
             await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
             return reply, eff_intent, language, session, True, _sources(official_records)
@@ -802,7 +828,7 @@ async def answer_chat(message: str, session_id: str | None, student_id: str) -> 
             reply = _unavailable_answer(language)
             await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
             return reply, eff_intent, language, session, False, []
-        fallback = _local_verified_answer(records, eff_intent)
+        fallback = _local_verified_answer(records, eff_intent, message=message)
         reply = await _grounded_response(message, language, records, fallback)
         await store.append_chat_turn(session, student_id, message, reply, eff_intent, language)
         return reply, eff_intent, language, session, True, _sources(records)
