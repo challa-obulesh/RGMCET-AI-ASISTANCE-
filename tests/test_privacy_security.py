@@ -397,3 +397,104 @@ def test_complete_appointment_lifecycle_synthetic_accounts(client):
     cancel_res = client.post(f"/api/appointments/{appt_id}/cancel", headers=stu_headers)
     assert cancel_res.status_code == 200
     assert cancel_res.json()["status"] == "CANCELLED"
+
+
+# =============================================================================
+# 7. Mocked Outbound Payload Inspection (Gemini & OpenAI)
+# =============================================================================
+
+@pytest.mark.asyncio
+async def test_mocked_gemini_outbound_payload_has_no_sensitive_data():
+    """Verify intercepted Gemini HTTP payload contains only sanitized text."""
+    from app.web_mvp import llm, config
+    from unittest.mock import MagicMock
+
+    captured_payloads = []
+
+    async def mock_post(self, url, headers=None, json=None):
+        captured_payloads.append(json)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "candidates": [{"content": {"parts": [{"text": "Sanitized response"}]}}]
+        }
+        mock_resp.raise_for_status.return_value = None
+        return mock_resp
+
+    with patch.object(config, "GEMINI_API_KEY", "test-gemini-key"), \
+         patch.object(config, "LLM_PROVIDER", "gemini"), \
+         patch("httpx.AsyncClient.post", new=mock_post):
+
+        sensitive_sys = "System prompt referencing admin@rgmcet.edu.in and password='SecretPassword123!'"
+        sensitive_usr = "Student contact 9849348501, token eyJhbGciOiJIUzI1NiJ9.demo.sig and mongodb://usr:pwd@host:27017/db"
+
+        result = await llm.complete(sensitive_sys, sensitive_usr)
+        assert result == "Sanitized response"
+        assert len(captured_payloads) == 1
+
+        payload = captured_payloads[0]
+        sys_text = payload["systemInstruction"]["parts"][0]["text"]
+        assert "admin@rgmcet.edu.in" not in sys_text
+        assert "[REDACTED_EMAIL]" in sys_text
+        assert "SecretPassword123!" not in sys_text
+
+        usr_text = payload["contents"][0]["parts"][0]["text"]
+        assert "9849348501" not in usr_text
+        assert "[REDACTED_PHONE]" in usr_text
+        assert "eyJhbGci" not in usr_text
+        assert "[REDACTED_TOKEN]" in usr_text
+        assert "mongodb://" not in usr_text
+        assert "[REDACTED_DB_CONNECTION]" in usr_text
+
+
+@pytest.mark.asyncio
+async def test_mocked_openai_outbound_payload_has_no_sensitive_data():
+    """Verify intercepted OpenAI HTTP payload contains only sanitized text."""
+    from app.web_mvp import llm, config
+    from unittest.mock import MagicMock
+
+    captured_payloads = []
+
+    async def mock_post(self, url, headers=None, json=None):
+        captured_payloads.append(json)
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "choices": [{"message": {"content": "OpenAI sanitized response"}}]
+        }
+        mock_resp.raise_for_status.return_value = None
+        return mock_resp
+
+    with patch.object(config, "GEMINI_API_KEY", ""), \
+         patch.object(config, "OPENAI_API_KEY", "sk-test-key-1234567890abcdef"), \
+         patch.object(config, "LLM_PROVIDER", "openai"), \
+         patch("httpx.AsyncClient.post", new=mock_post):
+
+        sensitive_sys = "Contact faculty at hod.cseds@rgmcet.edu.in"
+        sensitive_usr = "API Key AIzaSyD-1234567890abcdef1234567890 and phone 9849348501"
+
+        result = await llm.complete(sensitive_sys, sensitive_usr)
+        assert result == "OpenAI sanitized response"
+        assert len(captured_payloads) == 1
+
+        payload = captured_payloads[0]
+        sys_msg = payload["messages"][0]["content"]
+        assert "hod.cseds@rgmcet.edu.in" not in sys_msg
+        assert "[REDACTED_EMAIL]" in sys_msg
+
+        usr_msg = payload["messages"][1]["content"]
+        assert "AIzaSyD" not in usr_msg
+        assert "[REDACTED_API_KEY]" in usr_msg
+        assert "9849348501" not in usr_msg
+        assert "[REDACTED_PHONE]" in usr_msg
+
+
+def test_faculty_lookup_distinguishes_absence_from_nonexistence():
+    """Verify faculty lookup clarifies absence in verified records rather than asserting non-existence in reality."""
+    res = _deterministic_faculty_lookup("UnknownProfessorName", "CSE (Data Science)")
+    assert res is not None
+    reply, verified, sources = res
+    assert verified is True
+    assert "No matching faculty member named UnknownProfessorName was found in the verified Data Science faculty records" in reply
+    assert "verified faculty records" in reply
+

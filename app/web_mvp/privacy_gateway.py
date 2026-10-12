@@ -38,7 +38,7 @@ PHONE_REGEX = re.compile(
 
 # JWT pattern (header.payload.signature)
 JWT_REGEX = re.compile(
-    r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"
+    r"\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{3,}\.[A-Za-z0-9_-]{3,}\b"
 )
 
 # Bearer token pattern
@@ -53,12 +53,12 @@ DB_URI_REGEX = re.compile(
 
 # Known API key prefixes (Google, OpenAI, Anthropic, AWS, etc.)
 API_KEY_REGEX = re.compile(
-    r"\b(?:AIza[0-9A-Za-z-_]{35}|sk-[a-zA-Z0-9]{20,}|sk-proj-[a-zA-Z0-9_-]{20,}|ghp_[a-zA-Z0-9]{36})\b"
+    r"\b(?:AIza[0-9A-Za-z-_]{20,}|sk-[a-zA-Z0-9]{20,}|sk-proj-[a-zA-Z0-9_-]{20,}|ghp_[a-zA-Z0-9]{20,})\b"
 )
 
 # Generic credential / secret patterns (password="...", api_key="...")
 GENERIC_SECRET_REGEX = re.compile(
-    r"(?i)\b(?:password|passwd|api_key|apikey|secret_key|jwt_secret)\s*[:=]\s*['\"]([^'\"]{6,})['\"]"
+    r"(?i)\b(password|passwd|api_key|apikey|secret_key|jwt_secret)\s*[:=]\s*(?:['\"]([^'\"]{6,})['\"]|([^\s,;'\"]{6,}))"
 )
 
 
@@ -114,11 +114,11 @@ class PrivacySanitizer:
             stats["tokens"] += len(bearer_matches)
             sanitized = BEARER_REGEX.sub("Bearer [REDACTED_TOKEN]", sanitized)
 
-        # 4. Redact Generic secrets
+        # 4. Redact Generic secrets (redacting the secret value, keeping label for readability)
         secret_matches = GENERIC_SECRET_REGEX.findall(sanitized)
         if secret_matches:
             stats["secrets"] += len(secret_matches)
-            sanitized = GENERIC_SECRET_REGEX.sub(r"\1: [REDACTED_SECRET]", sanitized)
+            sanitized = GENERIC_SECRET_REGEX.sub(r"\1=[REDACTED_SECRET]", sanitized)
 
         # 5. Redact Email addresses
         email_matches = EMAIL_REGEX.findall(sanitized)
