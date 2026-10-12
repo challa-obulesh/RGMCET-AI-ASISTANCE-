@@ -70,9 +70,9 @@ async def run_production_verification():
     P("P50", f"Public backend health endpoint returned HTTP 200: {health_data}")
 
     timestamp = int(time.time())
-    admin_email = f"prod_admin_{timestamp}@rgmcet.edu.in"
-    prof_email = f"prod_prof_{timestamp}@rgmcet.edu.in"
-    student_email = f"prod_student_{timestamp}@rgmcet.edu.in"
+    admin_email = f"prod_admin_{timestamp}@example.com"
+    prof_email = f"prod_prof_{timestamp}@example.com"
+    student_email = f"prod_student_{timestamp}@example.com"
     password = "ProductionSecurePassword@123"
 
     # Register admin

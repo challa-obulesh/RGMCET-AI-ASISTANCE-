@@ -6,7 +6,7 @@ Runs visible Chrome (headless=False) end-to-end verification of:
 3. Official faculty records verified
 4. Admin approves a pending verified professor (Dr. K. Samunnisa)
 5. Admin logs out
-6. Approved Professor logs in (samunnisacseds@rgmcet.edu.in)
+6. Approved Professor logs in (samunnisa.cseds@example.com)
 7. Professor Dashboard at /professor/dashboard with identity header and schedule
 8. Student logs in / registers, books appointment with Dr. K. Samunnisa
 9. Professor logs in, verifies Pending Student Requests, clicks Approve
@@ -92,7 +92,7 @@ def main():
             return []
 
     # 1. Register a dedicated fresh Admin
-    admin_email = f"admin_{int(time.time())}@rgmcet.edu.in"
+    admin_email = f"admin_{int(time.time())}@example.com"
     admin_pass = "AdminPass123!"
     admin_reg = post_json("/api/auth/register", {
         "name": "RGMCET Head Administrator",
@@ -106,7 +106,7 @@ def main():
     # 2. Setup verified professor Dr. K. Samunnisa in PENDING state
     sam_reg = post_json("/api/auth/register", {
         "name": "Dr. K. Samunnisa",
-        "email": "samunnisacseds@rgmcet.edu.in",
+        "email": "samunnisa.cseds@example.com",
         "password": "SamunnisaPass123!",
         "role": "professor",
         "department": "CSE (Data Science)",
@@ -117,7 +117,7 @@ def main():
     if not sam_user_id and admin_tok:
         users = get_json("/api/admin/users", token=admin_tok)
         for u in users:
-            if u.get("email") == "samunnisacseds@rgmcet.edu.in":
+            if u.get("email") == "samunnisa.cseds@example.com":
                 sam_user_id = u.get("user_id")
                 break
 
@@ -138,7 +138,7 @@ def main():
     # 3. Setup Professor B (Dr. P. Penchala Prasad) in APPROVED state
     prasad_reg = post_json("/api/auth/register", {
         "name": "Dr. P. Penchala Prasad",
-        "email": "prasadcseds@rgmcet.edu.in",
+        "email": "prasad.cseds@example.com",
         "password": "PrasadPass123!",
         "role": "professor",
         "department": "CSE (Data Science)",
@@ -148,7 +148,7 @@ def main():
     if not prasad_user_id and admin_tok:
         users = get_json("/api/admin/users", token=admin_tok)
         for u in users:
-            if u.get("email") == "prasadcseds@rgmcet.edu.in":
+            if u.get("email") == "prasad.cseds@example.com":
                 prasad_user_id = u.get("user_id")
                 break
 
@@ -223,18 +223,18 @@ def main():
             assert "Professor Approvals" in approvals_text
             assert "Pending Professor Accounts" in approvals_text
             assert "Dr. K. Samunnisa" in approvals_text
-            assert "samunnisacseds@rgmcet.edu.in" in approvals_text
+            assert "samunnisa.cseds@example.com" in approvals_text
             assert "CSE (Data Science)" in approvals_text
             print("   Pending professor card visible with official email.")
 
             # 5. Verify official faculty registry table is shown
             print("5. Verifying Official RGMCET Faculty Registry table...")
             page.wait_for_selector("text=Official RGMCET CSE (Data Science) Faculty Registry", timeout=15000)
-            page.wait_for_selector("text=prasadcseds@rgmcet.edu.in", timeout=15000)
+            page.wait_for_selector("text=prasad.cseds@example.com", timeout=15000)
             table_text = page.locator("main").inner_text()
             assert "Official RGMCET CSE (Data Science) Faculty Registry" in table_text
             assert "Dr. B. Bhaskara Rao" in table_text
-            assert "prasadcseds@rgmcet.edu.in" in table_text
+            assert "prasad.cseds@example.com" in table_text
             print("   Official faculty records verified.")
 
             # 6. Approve the pending professor account
@@ -257,7 +257,7 @@ def main():
             if page.locator("#nav-login").is_visible():
                 page.click("#nav-login")
                 time.sleep(1)
-            page.fill("#login-email", "samunnisacseds@rgmcet.edu.in")
+            page.fill("#login-email", "samunnisa.cseds@example.com")
             page.fill("#login-password", "SamunnisaPass123!")
             page.click("#login-submit")
             try:
@@ -299,7 +299,7 @@ def main():
             else:
                 page.goto(f"{BASE_URL}/register")
             time.sleep(1)
-            student_email = f"student_{int(time.time())}@rgmcet.edu.in"
+            student_email = f"student_{int(time.time())}@example.com"
             if page.locator("#role-student").is_visible():
                 page.click("#role-student")
             page.fill("#register-name", "Ananya Sharma")
@@ -355,7 +355,7 @@ def main():
             if page.locator("#nav-login").is_visible():
                 page.click("#nav-login")
                 time.sleep(1)
-            page.fill("#login-email", "samunnisacseds@rgmcet.edu.in")
+            page.fill("#login-email", "samunnisa.cseds@example.com")
             page.fill("#login-password", "SamunnisaPass123!")
             page.click("#login-submit")
             try:
@@ -420,7 +420,7 @@ def main():
             if page.locator("#nav-login").is_visible():
                 page.click("#nav-login")
                 time.sleep(1)
-            page.fill("#login-email", "prasadcseds@rgmcet.edu.in")
+            page.fill("#login-email", "prasad.cseds@example.com")
             page.fill("#login-password", "PrasadPass123!")
             page.click("#login-submit")
             try:

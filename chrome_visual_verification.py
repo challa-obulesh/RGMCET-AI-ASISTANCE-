@@ -112,15 +112,15 @@ def main():
         results[tid] = f"FAIL: {err}"
 
     ts = int(time.time())
-    admin_email = f"admin_{ts}@rgmcet.edu.in"
+    admin_email = f"admin_{ts}@example.com"
     admin_pass = "AdminPass123!"
-    prof_a_email = "samunnisacseds@rgmcet.edu.in"
+    prof_a_email = "samunnisa.cseds@example.com"
     prof_a_pass = "SamunnisaPass123!"
-    prof_b_email = "prasadcseds@rgmcet.edu.in"
+    prof_b_email = "prasad.cseds@example.com"
     prof_b_pass = "PrasadPass123!"
-    student_email = f"student_{ts}@rgmcet.edu.in"
+    student_email = f"student_{ts}@example.com"
     student_pass = "StudentPass123!"
-    student2_email = f"student2_{ts}@rgmcet.edu.in"
+    student2_email = f"student2_{ts}@example.com"
 
     # Pre-setup users via API
     # 1. Admin

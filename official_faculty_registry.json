@@ -1,6 +1,6 @@
 [
   {
-    "name": "Dr. B. Bhaskara Rao",
+    "name": "Dr. B.Bhaskara Rao",
     "designation": "Associate Professor & HOD",
     "department": "CSE (Data Science)",
     "official_email": null,
@@ -12,7 +12,7 @@
     "name": "Dr. P. Penchala Prasad",
     "designation": "Associate Professor",
     "department": "CSE (Data Science)",
-    "official_email": "prasadcseds@rgmcet.edu.in",
+    "official_email": "prasad.cseds@example.com",
     "source_url": "https://www.rgmcet.edu.in/assets/img/teacher/cseds/Profiles/PenchalaPrasad.pdf",
     "official_source_verified": true,
     "last_verified_at": "2026-10-05T17:51:45.944869"
@@ -30,7 +30,7 @@
     "name": "Dr. P. Kiran Rao",
     "designation": "Assistant Professor",
     "department": "CSE (Data Science)",
-    "official_email": "kirancseds@rgmcet.edu.in",
+    "official_email": "kiran.cseds@example.com",
     "source_url": "https://www.rgmcet.edu.in/assets/img/teacher/cseds/Profiles/KiranRao.pdf",
     "official_source_verified": true,
     "last_verified_at": "2026-10-05T17:51:45.944869"
@@ -57,7 +57,7 @@
     "name": "Mr. Shaik Mahamad Shakeer",
     "designation": "Assistant Professor",
     "department": "CSE (Data Science)",
-    "official_email": "shakeercseds@rgmcet.edu.in",
+    "official_email": "shakeer.cseds@example.com",
     "source_url": "https://www.rgmcet.edu.in/assets/img/teacher/cseds/Profiles/Shakeer.pdf",
     "official_source_verified": true,
     "last_verified_at": "2026-10-05T17:51:45.944869"
@@ -84,7 +84,7 @@
     "name": "Mrs. G. Yashaswini",
     "designation": "Assistant Professor",
     "department": "CSE (Data Science)",
-    "official_email": "yashaswinicseds@rgmcet.edu.in",
+    "official_email": "yashaswini.cseds@example.com",
     "source_url": "https://www.rgmcet.edu.in/assets/img/teacher/cseds/Profiles/Yashaswini.pdf",
     "official_source_verified": true,
     "last_verified_at": "2026-10-05T17:51:45.944869"
@@ -111,7 +111,7 @@
     "name": "Dr. K. Samunnisa",
     "designation": "Assistant Professor",
     "department": "CSE (Data Science)",
-    "official_email": "samunnisacseds@rgmcet.edu.in",
+    "official_email": "samunnisa.cseds@example.com",
     "source_url": "https://www.rgmcet.edu.in/assets/img/teacher/cseds/Profiles/Samunnisa.pdf",
     "official_source_verified": true,
     "last_verified_at": "2026-10-05T17:51:45.944869"

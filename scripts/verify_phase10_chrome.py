@@ -59,9 +59,9 @@ async def run_verification():
         # ------------------------------------------------------------------ #
         # SETUP: Register admin account
         # ------------------------------------------------------------------ #
-        admin_email = f"admin_{int(time.time())}@rgmcet.edu.in"
+        admin_email = f"admin_{int(time.time())}@example.com"
         admin_pw = "Admin@1234!"
-        student_email = f"stu_{int(time.time())}@rgmcet.edu.in"
+        student_email = f"stu_{int(time.time())}@example.com"
 
         # Pre-register via API
         import urllib.request
@@ -127,7 +127,7 @@ async def run_verification():
         # ------------------------------------------------------------------ #
         try:
             # Quick API test — professor role should be blocked
-            prof_email = f"prof_{int(time.time())}@rgmcet.edu.in"
+            prof_email = f"prof_{int(time.time())}@example.com"
             body = json.dumps({"name": "Prof Test", "email": prof_email,
                                "password": admin_pw, "role": "professor"}).encode()
             try:

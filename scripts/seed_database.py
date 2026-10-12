@@ -35,10 +35,10 @@ from app.web_mvp.config import DATABASE_NAME, MONGODB_URI
 from app.web_mvp.auth import hash_password
 
 
-DEMO_STUDENT_EMAIL = "student.demo@rgmcet.dev"
+DEMO_STUDENT_EMAIL = "student1@example.com"
 DEMO_STUDENT_PASSWORD = "Demo@Student123"
 
-DEMO_PROFESSOR_EMAIL = "bhaskara.rao@rgmcet.dev"  # Development demo account — not an official email
+DEMO_PROFESSOR_EMAIL = "hod.cse.ds@example.com"  # Synthetic demo account — reserved example.com domain
 DEMO_PROFESSOR_PASSWORD = "Demo@Professor123"
 
 # ---------------------------------------------------------------------------

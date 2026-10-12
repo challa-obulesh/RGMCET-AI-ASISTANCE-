@@ -71,9 +71,9 @@ async def run_verification():
     cors_errors = []
 
     ts = int(time.time())
-    student1_email = f"student1_{ts}@rgmcet.edu.in"
-    student2_email = f"student2_{ts}@rgmcet.edu.in"
-    prof_email = f"b.bhaskararao@rgmcet.edu.in"
+    student1_email = f"student1_{ts}@example.com"
+    student2_email = f"student2_{ts}@example.com"
+    prof_email = f"hod.cse.ds@example.com"
     password = "Password123"
 
     async with async_playwright() as p:
@@ -552,7 +552,7 @@ async def run_verification():
                 await signup_link.first.click()
                 await page.wait_for_timeout(500)
 
-            other_prof = f"prof_iso_{ts}@rgmcet.edu.in"
+            other_prof = f"prof_iso_{ts}@example.com"
             await page.click("#role-professor")
             await page.fill("#register-name", "Dr. Unrelated Professor")
             await page.fill("#register-email", other_prof)

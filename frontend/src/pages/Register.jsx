@@ -154,13 +154,13 @@ export default function Register({ onNavigate }) {
             />
           </label>
           <label>
-            {role === 'professor' ? 'Official RGMCET Email' : 'Email address'}
+            {role === 'professor' ? 'Official / Demo Email' : 'Email address'}
             <input
               id="register-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder={role === 'professor' ? 'faculty@rgmcet.edu.in' : 'you@example.com'}
+              placeholder={role === 'professor' ? 'professor1@example.com' : 'you@example.com'}
               autoComplete="email"
               required
               disabled={busy}

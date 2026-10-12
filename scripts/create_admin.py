@@ -16,7 +16,7 @@ from app.web_mvp.auth import hash_password
 from app.web_mvp.config import DATABASE_NAME, MONGODB_URI
 
 ADMIN_NAME = "System Administrator"
-ADMIN_EMAIL = "admin@rgmcet.edu.in"
+ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "AdminPass123!"
 
 async def create_admin(name=ADMIN_NAME, email=ADMIN_EMAIL, password=ADMIN_PASSWORD):

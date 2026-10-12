@@ -78,7 +78,7 @@ async def retrieve_verified(
     # Handle broad lists specially just like Phase 5 did
     is_broad_dept = intent == "DEPARTMENT_INFORMATION" and ("department" in lowered_query or "branch" in lowered_query or "విభాగాలు" in lowered_query or "శాఖలు" in lowered_query) and (not entity or entity == "RGMCET")
     is_broad_fac = intent == "FACILITY_INFORMATION" and ("facilit" in lowered_query or "సదుపాయాలు" in lowered_query) and not entity
-    is_broad_prof = intent == "FACULTY_INFORMATION" and ("faculty" in lowered_query or "staff" in lowered_query) and "hod" not in lowered_query
+    is_broad_prof = intent == "FACULTY_INFORMATION" and ("faculty" in lowered_query or "staff" in lowered_query) and "hod" not in lowered_query and "named" not in lowered_query
     
     if is_broad_dept:
         for d in candidates:

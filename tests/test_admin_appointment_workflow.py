@@ -29,7 +29,7 @@ def test_professor_account_approval_lifecycle(client):
         "/api/auth/register",
         json={
             "name": "Dr. Sarah Connor",
-            "email": "sarah.connor@rgmcet.edu.in",
+            "email": "sarah.connor@example.com",
             "password": "Password123!",
             "role": "professor",
             "department": "Computer Science and Engineering",
@@ -43,7 +43,7 @@ def test_professor_account_approval_lifecycle(client):
     # 2. Attempt login while PENDING -> should be rejected with 403 Forbidden
     login_res = client.post(
         "/api/auth/login",
-        json={"email": "sarah.connor@rgmcet.edu.in", "password": "Password123!"},
+        json={"email": "sarah.connor@example.com", "password": "Password123!"},
     )
     assert login_res.status_code == 403
     assert "pending" in login_res.json()["detail"].lower()
@@ -53,7 +53,7 @@ def test_professor_account_approval_lifecycle(client):
         "/api/auth/register",
         json={
             "name": "Admin Officer",
-            "email": "admin.officer@rgmcet.edu.in",
+            "email": "admin.officer@example.com",
             "password": "AdminPassword123!",
             "role": "admin",
         },
@@ -79,7 +79,7 @@ def test_professor_account_approval_lifecycle(client):
     # 6. Approved professor can now log in successfully
     login_ok = client.post(
         "/api/auth/login",
-        json={"email": "sarah.connor@rgmcet.edu.in", "password": "Password123!"},
+        json={"email": "sarah.connor@example.com", "password": "Password123!"},
     )
     assert login_ok.status_code == 200
     prof_token = login_ok.json()["access_token"]
@@ -93,7 +93,7 @@ def test_professor_account_approval_lifecycle(client):
     # Suspended professor login rejected
     login_susp = client.post(
         "/api/auth/login",
-        json={"email": "sarah.connor@rgmcet.edu.in", "password": "Password123!"},
+        json={"email": "sarah.connor@example.com", "password": "Password123!"},
     )
     assert login_susp.status_code == 403
     assert "suspended" in login_susp.json()["detail"].lower()
@@ -117,7 +117,7 @@ def test_appointment_approval_and_rejection_workflow(client):
     # Setup Admin
     admin_res = client.post(
         "/api/auth/register",
-        json={"name": "Admin", "email": "admin@rgmcet.edu.in", "password": "Pass@123Admin", "role": "admin"},
+        json={"name": "Admin", "email": "admin@example.com", "password": "Pass@123Admin", "role": "admin"},
     )
     admin_headers = {"Authorization": f"Bearer {admin_res.json()['access_token']}"}
 
@@ -126,7 +126,7 @@ def test_appointment_approval_and_rejection_workflow(client):
         "/api/auth/register",
         json={
             "name": "Dr. K. Subba Rao",
-            "email": "ksubbarao@rgmcet.edu.in",
+            "email": "ksubbarao@example.com",
             "password": "ProfPassword123!",
             "role": "professor",
         },
@@ -136,14 +136,14 @@ def test_appointment_approval_and_rejection_workflow(client):
     client.post(f"/api/admin/users/{prof_user_id}/approve", headers=admin_headers)
     prof_login = client.post(
         "/api/auth/login",
-        json={"email": "ksubbarao@rgmcet.edu.in", "password": "ProfPassword123!"},
+        json={"email": "ksubbarao@example.com", "password": "ProfPassword123!"},
     )
     prof_headers = {"Authorization": f"Bearer {prof_login.json()['access_token']}"}
 
     # Setup Student
     student_res = client.post(
         "/api/auth/register",
-        json={"name": "Alice Student", "email": "alice@rgmcet.edu.in", "password": "StudentPass123!", "role": "student"},
+        json={"name": "Alice Student", "email": "alice@example.com", "password": "StudentPass123!", "role": "student"},
     )
     student_headers = {"Authorization": f"Bearer {student_res.json()['access_token']}"}
 
@@ -232,7 +232,7 @@ def test_authorization_security_boundaries(client):
     # Register student
     student_res = client.post(
         "/api/auth/register",
-        json={"name": "Bob Student", "email": "bob@rgmcet.edu.in", "password": "Password123!", "role": "student"},
+        json={"name": "Bob Student", "email": "bob@example.com", "password": "Password123!", "role": "student"},
     )
     student_headers = {"Authorization": f"Bearer {student_res.json()['access_token']}"}
 

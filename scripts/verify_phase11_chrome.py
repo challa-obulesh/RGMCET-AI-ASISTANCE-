@@ -89,9 +89,9 @@ async def run_verification():
     print(f"[INFO] Backend healthy on {BASE}: {health_data}")
 
     timestamp = int(time.time())
-    admin_email = f"admin_{timestamp}@rgmcet.edu.in"
-    prof_email = f"prof_{timestamp}@rgmcet.edu.in"
-    student_email = f"student_{timestamp}@rgmcet.edu.in"
+    admin_email = f"admin_{timestamp}@example.com"
+    prof_email = f"prof_{timestamp}@example.com"
+    student_email = f"student_{timestamp}@example.com"
     password = "SecurePassword@123"
 
     # Register initial users via API

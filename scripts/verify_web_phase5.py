@@ -21,9 +21,9 @@ async def verify_web_phase5():
     results = {}
 
     ts = int(time.time())
-    student1_email = f"student1_{ts}@rgmcet.edu.in"
-    student2_email = f"student2_{ts}@rgmcet.edu.in"
-    prof_email = f"b.bhaskararao@rgmcet.edu.in"
+    student1_email = f"student1_{ts}@example.com"
+    student2_email = f"student2_{ts}@example.com"
+    prof_email = f"hod.cse.ds@example.com"
     password = "Password123"
 
     import subprocess
@@ -569,7 +569,7 @@ async def verify_web_phase5():
                 await signup_link.first.click()
                 await page.wait_for_timeout(500)
 
-            other_prof_email = f"prof2_{ts}@rgmcet.edu.in"
+            other_prof_email = f"prof2_{ts}@example.com"
             await page.click("#role-professor")
             await page.fill("#register-name", "Dr. Other Professor")
             await page.fill("#register-email", other_prof_email)
