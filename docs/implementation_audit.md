@@ -128,6 +128,21 @@ A comprehensive implementation audit was conducted on the RGMCET AI Campus Assis
 | **13** | Unsupported Query Refusal | Safe refusal without fabricating hostel menus | "I couldn't find a verified answer..." | **PASS** |
 | **14** | MongoDB Disconnect Fallback | Seamless in-memory demo store activated | Zero crash, store_ready=True, demo_mode=True | **PASS** |
 
+### 4.3 Visible Chrome Local Verification Matrix (Manual Sign-Off)
+
+*Verified on host machine in Google Chrome at `http://127.0.0.1:8000`:*
+
+| # | Workflow Scenario | Observed Browser Behavior | Status |
+| :---: | :--- | :--- | :---: |
+| **1** | Student Login (`student1@example.com`) | Authenticated successfully, JWT stored in localStorage, student view initialized | **PASS** |
+| **2** | Professor Login (`hod.cse.ds@example.com`) | Authenticated successfully, routed to professor dashboard with approval queue | **PASS** |
+| **3** | Admin Dashboard (`admin@example.com`) | Admin navigation active, user management and system controls rendered | **PASS** |
+| **4** | Multilingual Enquiries | English, Telugu script, and Roman Telugu queries return accurate grounded college info | **PASS** |
+| **5** | Faculty Stephen Query | Anti-hallucination refusal: "No matching faculty member named Stephen was found" | **PASS** |
+| **6** | Appointment Lifecycle | Student creates appointment -> Professor approves -> Student sees `APPROVED` status | **PASS** |
+| **7** | RBAC Enforcement | Student attempting to view admin routes or approve appointments is denied | **PASS** |
+| **8** | DevTools Console / Network | Zero unhandled JS exceptions, zero 500 errors, network requests respond cleanly | **PASS** |
+
 ---
 
 ## 5. Security & Privacy Findings
