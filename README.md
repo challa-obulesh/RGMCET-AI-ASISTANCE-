@@ -104,65 +104,151 @@ The **RGMCET AI Campus Assistant** is a dedicated, website-only platform that un
 
 ## 🏛️ System Architecture
 
-The following diagram illustrates the end-to-end architecture of the RGMCET AI Campus Assistant:
+The following schematics illustrate the complete end-to-end architecture of the **RGMCET AI Campus Assistant**, covering all tiers from user personas down to persistence and external cloud services.
+
+### 1. Interactive Architecture Diagram
 
 ```mermaid
 flowchart TD
-    subgraph Users ["User Roles"]
-        S["Student"]
-        P["Professor"]
-        A["Admin"]
+    subgraph Users ["1. User Personas & Portals"]
+        StudentRole["Student User"]
+        ProfRole["Professor User"]
+        AdminRole["Administrator User"]
     end
 
-    subgraph Client ["Frontend (React 18 + Vite)"]
-        UI["Responsive Web UI / Dashboards"]
-        AuthContext["Auth Context & Token Manager"]
+    subgraph ClientTier ["2. Frontend Web Application (React 18 + Vite)"]
+        WebUI["Responsive Single Page App (SPA)"]
+        AuthContext["Auth Context & JWT Token Storage"]
+        APIService["Axios API Client Layer"]
     end
 
-    subgraph Server ["Backend (FastAPI + Python 3.11)"]
-        API["REST API Endpoints"]
-        SecMid["Security Headers & CORS Middleware"]
-        AuthMid["JWT Authentication & RBAC Layer"]
-        
-        subgraph CoreEngine ["Core Services & AI Orchestration"]
-            Agent["AI Agent Orchestrator"]
-            RAG["Semantic RAG & Vector Retrieval"]
-            ApptSvc["Appointment & Scheduling Service"]
-            CalSvc["Calendar Service Abstraction"]
-        end
+    subgraph SecurityTier ["3. Gateway & Security Layer (FastAPI)"]
+        SecHeaders["Security Headers Middleware"]
+        CORSMid["CORS Protection Middleware"]
+        AuthMid["JWT Auth & Role-Based Access Control"]
+        FastAPIRoutes["FastAPI REST Endpoints (/api/*)"]
     end
 
-    subgraph Storage ["Persistence & Knowledge Layer"]
-        Mongo[("MongoDB Atlas Cloud Database")]
-        KnowledgeStore[("Verified RGMCET Knowledge Base")]
+    subgraph OrchestrationTier ["4. Core Engine & AI Orchestrator"]
+        AgentEngine["AI Agent Orchestrator"]
+        RAGModule["Semantic RAG Retrieval Engine"]
+        PrivacyGateway["Privacy Gateway (PII & Secret Sanitizer)"]
+        AppointmentService["Appointment & Booking Service"]
+        CalendarService["Calendar Service Abstraction"]
     end
 
-    subgraph External ["External AI & Cloud Integrations"]
-        LLM["Google Gemini (gemini-2.0-flash)"]
-        GCal["Google Calendar API (OAuth 2.0)"]
+    subgraph DataTier ["5. Persistence & Knowledge Base"]
+        MongoAtlas[("MongoDB Atlas Cloud Database")]
+        VectorStore[("Pre-Computed Semantic Vector Index")]
+        OfficialKnowledge[("Verified RGMCET Knowledge Base")]
     end
 
-    S --> UI
-    P --> UI
-    A --> UI
-    UI --> AuthContext
-    AuthContext --> SecMid
-    SecMid --> API
-    API --> AuthMid
-    AuthMid --> Agent
-    AuthMid --> ApptSvc
+    subgraph ExternalTier ["6. External Cloud & AI Integrations"]
+        GeminiLLM["Google Gemini 2.0 Flash API"]
+        GoogleCalAPI["Google Calendar API (OAuth 2.0)"]
+    end
 
-    Agent --> RAG
-    Agent --> LLM
-    Agent --> KnowledgeStore
-    
-    ApptSvc --> Mongo
-    ApptSvc --> CalSvc
-    CalSvc -.-> GCal
-    
-    RAG --> KnowledgeStore
-    RAG --> LLM
+    StudentRole --> WebUI
+    ProfRole --> WebUI
+    AdminRole --> WebUI
+
+    WebUI --> AuthContext
+    WebUI --> APIService
+    APIService --> SecHeaders
+    SecHeaders --> CORSMid
+    CORSMid --> AuthMid
+    AuthMid --> FastAPIRoutes
+
+    FastAPIRoutes --> AgentEngine
+    FastAPIRoutes --> AppointmentService
+
+    AgentEngine --> RAGModule
+    AgentEngine --> PrivacyGateway
+    PrivacyGateway --> GeminiLLM
+
+    RAGModule --> VectorStore
+    RAGModule --> OfficialKnowledge
+
+    AppointmentService --> MongoAtlas
+    AppointmentService --> CalendarService
+    CalendarService -.-> GoogleCalAPI
 ```
+
+### 2. Complete Architectural Schematic
+
+```
++====================================================================================================+
+|                                    RGMCET AI CAMPUS ASSISTANT                                      |
+|                                 END-TO-END SYSTEM ARCHITECTURE                                     |
++====================================================================================================+
+|                                                                                                    |
+|  [ 1. USER PERSONAS & ACCESS ROLES ]                                                               |
+|  +--------------------+        +--------------------+        +--------------------+                |
+|  |    Student Portal  |        |  Professor Portal  |        |  Admin Workspace   |                |
+|  | (Chat, Book, Track)|        | (Approve, Schedule)|        | (RAG, Users, Audit)|                |
+|  +---------+----------+        +---------+----------+        +---------+----------+                |
+|            |                             |                             |                           |
+|            +-----------------------------+-----------------------------+                           |
+|                                          | HTTPS / REST (Port 443 / 8000)                          |
+|                                          v                                                         |
+|  [ 2. CLIENT WEB APPLICATION TIER - React 18 + Vite SPA ]                                          |
+|  +--------------------------------------------------------------------------------+                |
+|  | - Single Page App (SPA) mounted via FastAPI static file handler                |                |
+|  | - Responsive UI: Tailwind CSS Design System + Lucide Icons                      |                |
+|  | - State Management: AuthContext (JWT Storage & Role Routing)                   |                |
+|  | - Error Boundary: Component-level crash isolation and graceful fallback        |                |
+|  +---------------------------------------+----------------------------------------+                |
+|                                          | REST API Payloads (Bearer Token Authorization)          |
+|                                          v                                                         |
+|  [ 3. API GATEWAY & SECURITY TIER - FastAPI (Python 3.11) ]                                        |
+|  +--------------------------------------------------------------------------------+                |
+|  | - Security Headers: X-Content-Type-Options: nosniff | X-Frame-Options: DENY    |                |
+|  | - CORS Middleware: Restricts access to authorized domains & localhost         |                |
+|  | - Stateless JWT Authentication & Role-Based Access Control (RBAC dependencies) |                |
+|  | - REST Routers: /api/auth | /api/chat | /api/professors | /api/appointments     |                |
+|  | - Unhandled Exception Isolation: Generic 500 error preventing stack trace leaks |                |
+|  +-------------------+------------------------------------+-----------------------+                |
+|                      |                                    |                                        |
+|                      v                                    v                                        |
+|  [ 4. AI ORCHESTRATION ENGINE ]             [ 5. APPOINTMENT & CALENDAR ENGINE ]                   |
+|  +-----------------------------------+      +------------------------------------+                 |
+|  | - Multi-Turn AI Agent Loop        |      | - Appointment Lifecycle State Mach |                 |
+|  | - Intent Classifier (Multilingual)|      |   (PENDING -> APPROVED / REJECTED) |                 |
+|  | - Semantic RAG Retrieval          |      | - 30-min Slot Validation & Locking |                 |
+|  | - Deterministic Rule Fallback     |      | - Calendar Service Abstraction     |                 |
+|  +-------------------+---------------+      +------------------+-----------------+                 |
+|                      |                                         |                                   |
+|                      v Outbound Payload                        v Async Motor Driver                |
+|  [ 6. CENTRAL PRIVACY GATEWAY ]                                |                                   |
+|  +-----------------------------------+                         |                                   |
+|  | - Outbound Sanitizer & Redactor   |                         |                                   |
+|  | - Strips Emails, Phones, JWTs     |                         |                                   |
+|  | - Aborts on Serialization Failure |                         |                                   |
+|  +-------------------+---------------+                         |                                   |
+|                      |                                         |                                   |
+|  ====================+=========================================+=================================  |
+|  [ 7. PERSISTENCE & EXTERNAL CLOUD INTEGRATIONS ]                                                  |
+|                                                                                                    |
+|  +-----------------------+     +-----------------------+     +-----------------------+             |
+|  |  Google Gemini 2.0    |     |  Verified Knowledge   |     |  MongoDB Atlas        |             |
+|  |  Flash (LLM API)      |     |  & Vector Store       |     |  (Cloud Database)     |             |
+|  | Grounded Generation   |     | - Pre-computed Vectors|     | - Users & Credentials |             |
+|  | Multilingual Telugu   |     | - Department Catalog  |     | - Appointments & Slots|             |
+|  | Zero-Hallucination    |     | - Official Facilities |     | - Audit Logs & Chats  |             |
+|  +-----------------------+     +-----------------------+     +-----------------------+             |
++====================================================================================================+
+```
+
+### 3. Layer-by-Layer Architectural Breakdown
+
+| Architectural Layer | Core Technologies | Primary Responsibilities |
+| :--- | :--- | :--- |
+| **Presentation Tier** | React 18, Vite 6, Tailwind CSS, Lucide | Role-tailored dashboards for Students, Professors, and Admins; real-time conversational chat UI with citation links; faculty appointment booking and schedule tracking. |
+| **Security & Gateway Tier** | FastAPI, `python-jose`, `passlib[bcrypt]`, Starlette | HTTP security headers (`nosniff`, `DENY`), strict CORS whitelist, stateless JWT validation, RBAC route dependencies, and non-leaking global error handling. |
+| **AI Orchestration & RAG Tier** | Python 3.11, Vector Embeddings, ReAct Agent | Multilingual intent detection (English, Telugu, Roman Telugu), semantic retrieval over institutional documents, deterministic fallback engine, and tool execution. |
+| **Data Privacy Gateway** | Custom Regex Tokenizer & Sanitizer | Automated stripping of emails, phone numbers, API keys, database URIs, and JWT credentials before any external model dispatch. |
+| **Persistence Tier** | MongoDB Atlas (Motor Async Driver), JSON Vector Index | Cloud persistence of users, appointments, audit logs, and pre-indexed cosine vector representations of official campus knowledge. |
+| **External Integrations** | Google Gemini API (`gemini-2.0-flash`), Google Calendar API | Grounded LLM conversational generation, source-attributed responses, and OAuth 2.0 calendar synchronization. |
 
 ---
 
@@ -575,15 +661,15 @@ The project follows a Trunk-Based Development with Feature Branches workflow:
 
 ```mermaid
 gitGraph
-    commit id: "v0.1.0 (Core RAG & Booking)"
-    commit id: "v0.2.0 (Admin Suite & Render Deploy)"
+    commit id: "v0.1.0"
+    commit id: "v0.2.0"
     branch feature/security-privacy
     checkout feature/security-privacy
-    commit id: "feat(privacy): PrivacyGateway"
-    commit id: "test(security): mock LLM tests"
+    commit id: "feat-privacy"
+    commit id: "test-security"
     checkout main
-    merge feature/security-privacy id: "PR #1 Merged" tag: "v0.3.0"
-    commit id: "fix(chat): faculty refusal guard"
+    merge feature/security-privacy id: "pr-1-merge" tag: "v0.3.0"
+    commit id: "fix-chat"
 ```
 
 1. **Branch Out**: Create a focused branch from the latest `main`:
