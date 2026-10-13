@@ -54,7 +54,7 @@ The application is deployed live in production on **Render** with cloud persiste
 ## 📋 Project Overview
 
 ### Problem Statement
-College campuses host a high volume of recurring administrative inquiries regarding departmental structures, faculty contacts, academic programs, facilities, and visiting schedules. Students frequently face friction when seeking official, verified information or attempting to book time with professors whose availability varies across teaching timetables. Traditional bulletin boards and ungrounded messaging bots often present outdated details, lack accountability, or risk generating AI hallucinations.
+College campuses host a high volume of recurring administrative inquiries regarding departmental structures, faculty contacts, academic programs, facilities, and visiting schedules. Students frequently face when seeking official, verified information or attempting to book time with professors whose availability varies across teaching timetables. Traditional bulletin boards and ungrounded messaging bots often present outdated details, lack accountability, or risk generating AI hallucinations.
 
 ### The Solution
 The **RGMCET AI Campus Assistant** is a dedicated, website-only platform that unites:
@@ -818,4 +818,4 @@ The following items are planned for future iterations and are clearly demarcated
 * **Primary Branch**: `main`
 * **Current Version**: `v0.3.0`
 * **Version Control**: Git + GitHub Actions CI
-* **License**: Academic & Educational Use — Rajeev Gandhi Memorial College of Engineering and Technology
+* **License**: Academic & Educational Use — Rajeev Gandhi Memorial College of Engineering and Technology
