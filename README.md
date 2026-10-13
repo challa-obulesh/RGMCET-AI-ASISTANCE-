@@ -1,6 +1,38 @@
 # RGMCET AI Campus Assistant
 
+[![CI Test Pipeline](https://github.com/challa-obulesh/RGMCET-AI-ASISTANCE-/actions/workflows/ci.yml/badge.svg)](https://github.com/challa-obulesh/RGMCET-AI-ASISTANCE-/actions)
+[![Production Status](https://img.shields.io/badge/Render-Live%20Production-success?logo=render&logoColor=white)](https://rgmcet-ai-campus-assistant.onrender.com)
+[![Release Version](https://img.shields.io/badge/Release-v0.3.0-blue.svg)](https://github.com/challa-obulesh/RGMCET-AI-ASISTANCE-/releases)
+[![Tests Passing](https://img.shields.io/badge/Tests-250%2F250%20Passing-brightgreen.svg)]()
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/Frontend-React%2018%20%2B%20Vite%206-61DAFB.svg?logo=react&logoColor=black)](https://react.dev/)
+[![Database](https://img.shields.io/badge/Database-MongoDB%20Atlas-47A248.svg?logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
+[![AI Grounding](https://img.shields.io/badge/LLM-Gemini%202.0%20Flash-orange.svg?logo=google-gemini&logoColor=white)](https://deepmind.google/technologies/gemini/)
+
 > An intelligent, production-ready campus inquiry and appointment management platform tailored for Rajeev Gandhi Memorial College of Engineering and Technology (RGMCET). Built with a FastAPI backend, React + Vite single-page frontend, semantic RAG knowledge grounding, and multi-role workflows for Students, Professors, and Administrators.
+
+---
+
+## 📑 Table of Contents
+
+- [🌐 Live Demo & Deployment](#-live-demo--deployment)
+- [📋 Project Overview](#-project-overview)
+- [✨ Key Features](#-key-features)
+- [🏛️ System Architecture](#️-system-architecture)
+- [🧠 AI & RAG Architecture](#-ai--rag-architecture)
+- [🔄 User & Appointment Workflows](#-user--appointment-workflows)
+- [🔒 Authentication & Security](#-authentication--security)
+- [🛠️ Technology Stack](#️-technology-stack)
+- [📁 Project Structure](#-project-structure)
+- [🔑 Environment Variables](#-environment-variables)
+- [💻 Local Development Setup](#-local-development-setup)
+- [🚀 Production Deployment](#-production-deployment)
+- [🧪 Testing & Verification Status](#-testing--verification-status)
+- [🛡️ Security Best Practices & Data Privacy Hardening](#️-security-best-practices--data-privacy-hardening)
+- [🌿 Version Control, Branching & Release Management](#-version-control-branching--release-management)
+- [🔮 Future Improvements](#-future-improvements)
+- [👨‍💻 Project Information & License](#-project-information)
 
 ---
 
@@ -13,8 +45,8 @@ The application is deployed live in production on **Render** with cloud persiste
 > [!NOTE]
 > **Free Tier Cold Start Notice**: The production service is hosted on Render's free tier. If the instance has been inactive, the initial request may spin up the container and take approximately 30–60 seconds for a cold start. Subsequent requests execute instantly.
 
-* **GitHub Branch**: `phase5`
-* **Latest Deployment Dependency Commit**: `27b9be2`
+* **Primary GitHub Branch**: `main` (Production deployment branch)
+* **Milestone & Release Tag**: `v0.3.0`
 * **Platform Architecture**: Single-origin web application (FastAPI serving compiled React/Vite SPA and REST API)
 
 ---
@@ -398,7 +430,7 @@ The application relies on the following environment variable names. For security
 ```bash
 git clone https://github.com/challa-obulesh/RGMCET-AI-ASISTANCE-.git
 cd RGMCET-AI-ASISTANCE-
-git checkout phase5
+git checkout main
 ```
 
 ### 2. Configure Environment
@@ -439,7 +471,7 @@ The application is packaged with a multi-stage Dockerfile that builds the React 
 
 1. **Create Web Service**: Connect your GitHub repository to [Render](https://render.com).
 2. **Environment**: Select `Docker`.
-3. **Branch**: `phase5`.
+3. **Branch**: `main`.
 4. **Environment Variables**: Populate the production variables (`MONGODB_URI`, `DATABASE_NAME`, `JWT_SECRET`, `LLM_PROVIDER`, `GEMINI_API_KEY`, etc.) in the Render Dashboard.
 5. **Health Check Path**: `/api/health`.
 
@@ -461,7 +493,7 @@ The project includes an extensive automated test suite covering all layers of th
 ```
 
 ### Verified Testing Results:
-* **Backend Test Suite**: **222 / 222 tests passing** (100% pass rate).
+* **Backend Test Suite**: **250 / 250 tests passing** (100% pass rate).
 * **Frontend Production Build**: **Pass** (Clean Vite compilation into `frontend/dist` with zero errors).
 * **Production Deployment**: Verified live and operational on Render.
 * **MongoDB Atlas Persistence**: Read/write operations verified against cloud database.
@@ -513,11 +545,171 @@ Every outbound request destined for an external hosted LLM provider (such as Goo
 # Run the dedicated automated privacy and security test suite (10 tests)
 .\.venv\Scripts\python.exe -m pytest tests/test_privacy_security.py -v
 
-# Run the complete regression test suite (246 tests)
+# Run the complete regression test suite (250 tests passing)
 .\.venv\Scripts\python.exe -m pytest tests/ -q
 
 # Run visible Google Chrome end-to-end verification (headless=False)
 .\.venv\Scripts\python.exe scripts/verify_phase7_chrome_full.py
+```
+
+---
+
+## 🌿 Version Control, Branching & Release Management
+
+The RGMCET AI Campus Assistant repository adheres to disciplined Git version control protocols, Conventional Commits, Semantic Versioning (SemVer), and automated GitHub Actions Continuous Integration (CI).
+
+### 1. Repository Topology & Branch Roles
+
+| Branch Name | Type | Purpose | Protected | Deployment Target |
+| :--- | :--- | :--- | :---: | :--- |
+| **`main`** | Primary / Trunk | Stable, production-ready codebase. All merged changes pass automated CI. | Yes | Render Production Web Service |
+| **`feature/*`** | Topic Branch | Development of new user-facing features or system capabilities (e.g. `feature/security-privacy-demo-data`). | No | Local / Review Staging |
+| **`fix/*`** / **`hotfix/*`** | Patch Branch | Targeted defect fixes and fast patches (e.g. `fix/faculty-lookup-anti-hallucination`). | No | Local / Review Staging |
+| **`phase5`** .. **`phase12`** | Milestone Archive | Historical development phase snapshots capturing verification gates and architecture progression. | Preserved | Phase Verification Audits |
+
+---
+
+### 2. Git Flow & Release Lifecycle
+
+The project follows a Trunk-Based Development with Feature Branches workflow:
+
+```mermaid
+gitGraph
+    commit id: "v0.1.0 (Core RAG & Booking)"
+    commit id: "v0.2.0 (Admin Suite & Render Deploy)"
+    branch feature/security-privacy
+    checkout feature/security-privacy
+    commit id: "feat(privacy): PrivacyGateway"
+    commit id: "test(security): mock LLM tests"
+    checkout main
+    merge feature/security-privacy id: "PR #1 Merged" tag: "v0.3.0"
+    commit id: "fix(chat): faculty refusal guard"
+```
+
+1. **Branch Out**: Create a focused branch from the latest `main`:
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b feature/my-new-feature
+   ```
+2. **Develop & Test**: Implement changes locally and verify via automated pytest suite (250 tests):
+   ```bash
+   .\.venv\Scripts\python.exe -m pytest tests/ -q
+   ```
+3. **Commit with Conventions**: Follow the [Conventional Commits](#3-commit-message-conventions-conventional-commits) standard.
+4. **Pull Request (PR)**: Open a PR on GitHub targeting `main`.
+5. **Continuous Integration Gate**: Automated GitHub Actions CI workflow must pass all checks before merge approval.
+6. **Deploy & Tag**: Merging into `main` automatically triggers Render deployment; create an annotated SemVer tag for release tracking.
+
+---
+
+### 3. Commit Message Conventions (Conventional Commits)
+
+All commits in this repository conform to the [Conventional Commits Specification (v1.0.0)](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <short description in imperative mood>
+
+[optional body providing deeper rationale]
+
+[optional footer(s), e.g., Resolves #123]
+```
+
+#### Commit Types
+
+| Type | Intent | Example from Repository History |
+| :--- | :--- | :--- |
+| **`feat`** | Introduces a new feature | `feat(privacy): fix generic secret regex, broaden API key & JWT patterns` |
+| **`fix`** | Fixes a software defect or edge case | `fix(chat): ensure queries about nonexistent faculty return direct refusal` |
+| **`docs`** | Documentation only updates | `docs(audit): record confirmed visible Chrome verification results` |
+| **`test`** | Adds, refactors, or updates automated test suites | `test(e2e): verify browser workflows, improve chat UI, and add MongoDB fallback` |
+| **`refactor`** | Code changes that neither fix a bug nor add a feature | `refactor(store): clean up async motor client connection life-cycle` |
+| **`perf`** | Performance or query speed optimization | `perf(vector): pre-cache cosine embeddings for instant similarity lookup` |
+| **`chore`** | Build scripts, dependencies, or configuration | `chore(deps): update requirements.txt with google-genai dependency` |
+| **`ci`** | Changes to CI configuration or automation scripts | `ci(github): configure pytest regression matrix on Ubuntu runner` |
+
+---
+
+### 4. Semantic Versioning & Release Changelog
+
+The repository follows [Semantic Versioning 2.0.0](https://semver.org/) (`vMAJOR.MINOR.PATCH`):
+* **MAJOR**: Breaking API schema modifications or incompatible architectural pivots.
+* **MINOR**: Backwards-compatible new features, portals, or major workflow additions.
+* **PATCH**: Backwards-compatible bug fixes, security patches, or documentation improvements.
+
+#### Release History
+
+| Release Version | Date | Key Highlights & Changes |
+| :--- | :--- | :--- |
+| **`v0.3.0`** *(Current)* | Oct 2026 | **Security & Privacy Hardening**: Centralized `PrivacyGateway` (email/PII/JWT sanitization), synthetic RFC 2606 demo identities (`@example.com`), deterministic faculty verification (anti-hallucination guardrail), 250 passed automated pytest test cases, Chrome visible E2E verification suite. |
+| **`v0.2.0`** | Oct 2026 | **Phase 10-12 Administrative Suite & Deployment**: 12-tab Admin dashboard, RAG vector index statistics & manual reindexing, Professor registration approval queue, Google Calendar OAuth service abstraction, multi-stage Docker build, and live Render deployment. |
+| **`v0.1.0`** | Sep 2026 | **Web MVP & Core RAG Pipeline**: React 18 single-page app, FastAPI backend, semantic RAG over RGMCET knowledge, multi-role Student/Professor dashboards, 30-minute appointment booking engine, and JWT role-based security. |
+
+---
+
+### 5. Continuous Integration (CI) Workflow
+
+Every push and pull request targeting `main` or `master` is automatically validated via GitHub Actions ([ci.yml](file:///c:/Users/chall/OneDrive/Desktop/whatsapp%20ai%20agent/.github/workflows/ci.yml)):
+
+* **Runner Environment**: `ubuntu-latest`
+* **Runtime**: Python `3.11`
+* **Steps Executed**:
+  1. `actions/checkout@v4`: Clean repository checkout.
+  2. `actions/setup-python@v4`: Python 3.11 environment initialization with caching.
+  3. Dependency Resolution: Installs `requirements.txt`, `pytest`, and `pytest-asyncio`.
+  4. Test Execution: Runs `pytest -q` across all 250 unit, integration, and security test suites.
+
+> [!IMPORTANT]
+> Merging into `main` requires all automated tests in the CI pipeline to pass with 0 errors.
+
+---
+
+### 6. Release Tagging Protocol
+
+To release a new version tag:
+
+```bash
+# 1. Ensure you are on the latest main branch with clean working directory
+git checkout main
+git pull origin main
+
+# 2. Run the complete test suite to confirm 100% passing status
+.\.venv\Scripts\python.exe -m pytest tests/ -q
+
+# 3. Create an annotated git tag with release notes
+git tag -a v0.3.0 -m "Release v0.3.0: Data Privacy Gateway, RFC 2606 Synthetic Identities & Anti-Hallucination Guardrails"
+
+# 4. Push the tag to GitHub remote
+git push origin v0.3.0
+```
+
+---
+
+### 7. Developer Git Cheatsheet
+
+```bash
+# Clone the repository
+git clone https://github.com/challa-obulesh/RGMCET-AI-ASISTANCE-.git
+cd RGMCET-AI-ASISTANCE-
+
+# Create a new feature branch
+git checkout -b feature/appointment-rescheduling
+
+# Inspect modified files and staging state
+git status -s
+
+# Stage changes
+git add app/web_mvp/services.py tests/test_appointments.py
+
+# Commit with Conventional Commit formatting
+git commit -m "feat(appointments): add reschedule consultation endpoint with notification"
+
+# Rebase feature branch on latest main before opening PR
+git fetch origin
+git rebase origin/main
+
+# Push feature branch to GitHub remote
+git push -u origin feature/appointment-rescheduling
 ```
 
 ---
@@ -532,9 +724,12 @@ The following items are planned for future iterations and are clearly demarcated
 
 ---
 
-## 👨‍💻 Project Information
+## 👨‍💻 Project Information & Governance
 
 * **Institution**: Rajeev Gandhi Memorial College of Engineering and Technology (RGMCET)
 * **Project**: AI Campus Assistant
 * **Repository**: [https://github.com/challa-obulesh/RGMCET-AI-ASISTANCE-](https://github.com/challa-obulesh/RGMCET-AI-ASISTANCE-)
-* **Primary Branch**: `phase5`
+* **Primary Branch**: `main`
+* **Current Version**: `v0.3.0`
+* **Version Control**: Git + GitHub Actions CI
+* **License**: Academic & Educational Use — Rajeev Gandhi Memorial College of Engineering and Technology
